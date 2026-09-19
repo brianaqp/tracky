@@ -9,16 +9,16 @@ function validToken(given: string, expected: string): boolean {
   return a.length === b.length && timingSafeEqual(a, b);
 }
 
-/** Bearer-protected, stateless Streamable HTTP handler at /mcp. */
+/** x-api-key-protected, stateless Streamable HTTP handler at /mcp. */
 export function makeHandler(db: Db, token: string) {
   return async (req: Request): Promise<Response> => {
     if (new URL(req.url).pathname !== "/mcp") return new Response("Not found", { status: 404 });
 
-    const bearer = /^Bearer (.+)$/i.exec(req.headers.get("authorization") ?? "")?.[1];
-    if (!bearer || !validToken(bearer, token)) {
+    const apiKey = req.headers.get("x-api-key");
+    if (!apiKey || !validToken(apiKey, token)) {
       return new Response(JSON.stringify({ error: "unauthorized" }), {
         status: 401,
-        headers: { "content-type": "application/json", "www-authenticate": "Bearer" },
+        headers: { "content-type": "application/json" },
       });
     }
 
