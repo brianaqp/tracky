@@ -1,6 +1,6 @@
 # tracky (TS)
 
-Home-manager MCP server: Bun + TypeScript + `@modelcontextprotocol/sdk` + Drizzle (SQLite) + Zod.
+Home-manager MCP server: Bun + TypeScript + `@modelcontextprotocol/sdk` + Drizzle (PostgreSQL) + Zod.
 
 ```bash
 bun install
@@ -10,6 +10,6 @@ bun test
 bun run db:generate  # after editing src/schema.ts
 ```
 
-Auth: single bearer token (`ALLOW_TOKEN`). Env: `TRACKY_DATABASE_URL` (path, default `tracky.db`), `HOST`, `PORT`.
+Auth: single bearer token (`ALLOW_TOKEN`). Env: `TRACKY_DATABASE_URL` (Postgres URL, default `postgres://postgres:postgres@localhost:5432/tracky`; migrations run on startup), `HOST`, `PORT`.
 
 Connect: `claude mcp add --transport http tracky http://localhost:8000/mcp --header "Authorization: Bearer <token>"`

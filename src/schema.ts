@@ -1,27 +1,27 @@
 import { sql } from "drizzle-orm";
-import { check, index, integer, real, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { check, doublePrecision, index, integer, pgTable, text } from "drizzle-orm/pg-core";
 
-const now = sql`(strftime('%Y-%m-%dT%H:%M:%S', 'now'))`;
+const now = sql`to_char(now() at time zone 'utc', 'YYYY-MM-DD"T"HH24:MI:SS')`;
 
-export const categories = sqliteTable("categories", {
-  id: integer().primaryKey({ autoIncrement: true }),
+export const categories = pgTable("categories", {
+  id: integer().primaryKey().generatedAlwaysAsIdentity(),
   name: text().notNull().unique(),
 });
 
-export const products = sqliteTable("products", {
-  id: integer().primaryKey({ autoIncrement: true }),
+export const products = pgTable("products", {
+  id: integer().primaryKey().generatedAlwaysAsIdentity(),
   name: text().notNull().unique(),
   unit: text().notNull(), // "L", "kg", "pza"
   categoryId: integer("category_id").references(() => categories.id, { onDelete: "set null" }),
 });
 
 // Money is stored as integer cents to avoid float drift.
-export const purchases = sqliteTable(
+export const purchases = pgTable(
   "purchases",
   {
-    id: integer().primaryKey({ autoIncrement: true }),
+    id: integer().primaryKey().generatedAlwaysAsIdentity(),
     productId: integer("product_id").notNull().references(() => products.id, { onDelete: "cascade" }),
-    quantity: real().notNull(),
+    quantity: doublePrecision().notNull(),
     totalCents: integer("total_cents").notNull(),
     store: text(),
     notes: text(),
@@ -35,12 +35,12 @@ export const purchases = sqliteTable(
   ],
 );
 
-export const consumption = sqliteTable(
+export const consumption = pgTable(
   "consumption",
   {
-    id: integer().primaryKey({ autoIncrement: true }),
+    id: integer().primaryKey().generatedAlwaysAsIdentity(),
     productId: integer("product_id").notNull().references(() => products.id, { onDelete: "cascade" }),
-    quantity: real().notNull(),
+    quantity: doublePrecision().notNull(),
     user: text().notNull(),
     consumedAt: text("consumed_at").notNull().default(now),
   },

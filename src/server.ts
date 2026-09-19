@@ -5,7 +5,7 @@ import * as s from "./services";
 import { ConsumptionIn, IsoDate, Name, ProductRef, PurchaseIn } from "./schemas";
 
 const USER = "home";
-const out = (data: unknown) => ({ content: [{ type: "text" as const, text: JSON.stringify(data) }] });
+const out = async (data: unknown) => ({ content: [{ type: "text" as const, text: JSON.stringify(data) }] });
 
 export function buildServer(db: Db): McpServer {
   const mcp = new McpServer(
@@ -17,12 +17,12 @@ export function buildServer(db: Db): McpServer {
     },
   );
 
-  mcp.registerTool("list_categories", { description: "List all categories." }, () => out(s.listCategories(db)));
+  mcp.registerTool("list_categories", { description: "List all categories." }, async () => out(await s.listCategories(db)));
 
   mcp.registerTool(
     "add_category",
     { description: "Create a category (idempotent, case-insensitive).", inputSchema: { name: Name } },
-    ({ name }) => out(s.addCategory(db, name)),
+    async ({ name }) => out(await s.addCategory(db, name)),
   );
 
   mcp.registerTool(
@@ -31,7 +31,7 @@ export function buildServer(db: Db): McpServer {
       description: "Create a product. `unit` is how it is measured (L, kg, pza). The category is created if missing.",
       inputSchema: { name: Name, unit: Name, category: Name.optional() },
     },
-    ({ name, unit, category }) => out(s.addProduct(db, name, unit, category)),
+    async ({ name, unit, category }) => out(await s.addProduct(db, name, unit, category)),
   );
 
   mcp.registerTool(
@@ -40,7 +40,7 @@ export function buildServer(db: Db): McpServer {
       description: "List products, optionally filtered by category or name substring.",
       inputSchema: { category: z.string().optional(), search: z.string().optional() },
     },
-    ({ category, search }) => out(s.listProducts(db, category, search)),
+    async ({ category, search }) => out(await s.listProducts(db, category, search)),
   );
 
   mcp.registerTool(
@@ -51,7 +51,7 @@ export function buildServer(db: Db): McpServer {
         "E.g. 24 L of milk for 480.00 -> quantity=24, total_price=480. Returns the computed unit price.",
       inputSchema: PurchaseIn.shape,
     },
-    (args) => out(s.addPurchase(db, args, USER)),
+    async (args) => out(await s.addPurchase(db, args, USER)),
   );
 
   mcp.registerTool(
@@ -60,7 +60,7 @@ export function buildServer(db: Db): McpServer {
       description: "Record that some quantity of a product was consumed (used to estimate stock and days left).",
       inputSchema: ConsumptionIn.shape,
     },
-    (args) => out(s.logConsumption(db, args, USER)),
+    async (args) => out(await s.logConsumption(db, args, USER)),
   );
 
   mcp.registerTool(
@@ -69,7 +69,7 @@ export function buildServer(db: Db): McpServer {
       description: "Latest purchases of a product with unit price, newest first. Use it to spot price changes.",
       inputSchema: { product: ProductRef, limit: z.number().int().min(1).max(200).default(20) },
     },
-    ({ product, limit }) => out(s.priceHistory(db, product, limit)),
+    async ({ product, limit }) => out(await s.priceHistory(db, product, limit)),
   );
 
   mcp.registerTool(
@@ -83,7 +83,7 @@ export function buildServer(db: Db): McpServer {
         category: z.string().optional(),
       },
     },
-    ({ start, end, group_by, category }) => out(s.spendingSummary(db, start, end, group_by, category)),
+    async ({ start, end, group_by, category }) => out(await s.spendingSummary(db, start, end, group_by, category)),
   );
 
   mcp.registerTool(
@@ -93,7 +93,7 @@ export function buildServer(db: Db): McpServer {
         "Estimated stock (purchased - consumed) and days left, based on average consumption over the last `window_days`.",
       inputSchema: { product: ProductRef, window_days: z.number().int().min(1).max(365).default(30) },
     },
-    ({ product, window_days }) => out(s.stockEstimate(db, product, window_days)),
+    async ({ product, window_days }) => out(await s.stockEstimate(db, product, window_days)),
   );
 
   return mcp;
