@@ -1,0 +1,13 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1789857693777,
+      "tag": "0000_jittery_starhawk",
+      "breakpoints": true
+    }
+  ]
+}
