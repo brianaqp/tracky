@@ -1,5 +1,5 @@
 import { timingSafeEqual } from "node:crypto";
-import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
+import { createMcpHandler } from "@modelcontextprotocol/server";
 import type { Db } from "./db";
 import { buildServer } from "./server";
 
@@ -9,8 +9,10 @@ function validToken(given: string, expected: string): boolean {
   return a.length === b.length && timingSafeEqual(a, b);
 }
 
-/** x-api-key-protected, stateless Streamable HTTP handler at /mcp. */
+/** x-api-key-protected, stateless MCP handler at /mcp (serves 2026-07-28 and legacy 2025 clients). */
 export function makeHandler(db: Db, token: string) {
+  const mcp = createMcpHandler(() => buildServer(db));
+
   return async (req: Request): Promise<Response> => {
     if (new URL(req.url).pathname !== "/mcp") return new Response("Not found", { status: 404 });
 
@@ -22,11 +24,6 @@ export function makeHandler(db: Db, token: string) {
       });
     }
 
-    const transport = new WebStandardStreamableHTTPServerTransport({
-      sessionIdGenerator: undefined,
-      enableJsonResponse: true,
-    });
-    await buildServer(db).connect(transport);
-    return transport.handleRequest(req);
+    return mcp.fetch(req);
   };
 }

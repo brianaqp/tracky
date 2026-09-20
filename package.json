@@ -5,10 +5,12 @@
   "scripts": {
     "start": "bun src/index.ts",
     "test": "bun test",
-    "db:generate": "drizzle-kit generate"
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "inspector": "bunx @modelcontextprotocol/inspector"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.30.0",
+    "@modelcontextprotocol/server": "^2.0.0",
     "@neondatabase/serverless": "^1.1.0",
     "dotenv": "^18.0.1",
     "drizzle-orm": "^1.0.0-rc.4",
