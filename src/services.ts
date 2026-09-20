@@ -38,10 +38,10 @@ export function listCategories(db: Db) {
   return db.select().from(categories).orderBy(categories.name);
 }
 
-export async function addProduct(db: Db, name: string, category?: string | null) {
+export async function addProduct(db: Db, name: string, category?: string | null, notes?: string | null) {
   const cid = category ? await categoryId(db, category) : null;
-  const [{ id }] = await db.insert(products).values({ name, categoryId: cid }).returning({ id: products.id }) as [{ id: number }];
-  return { id, name, category: category ?? null };
+  const [{ id }] = await db.insert(products).values({ name, notes, categoryId: cid }).returning({ id: products.id }) as [{ id: number }];
+  return { id, name, notes: notes ?? null, category: category ?? null };
 }
 
 export function listProducts(db: Db, category?: string | null, search?: string | null) {
@@ -50,7 +50,7 @@ export function listProducts(db: Db, category?: string | null, search?: string |
     search ? like(products.name, search) : undefined,
   ];
   return db
-    .select({ id: products.id, name: products.name, category: categories.name })
+    .select({ id: products.id, name: products.name, notes: products.notes, category: categories.name })
     .from(products)
     .leftJoin(categories, eq(products.categoryId, categories.id))
     .where(and(...conds))

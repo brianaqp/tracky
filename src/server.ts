@@ -12,7 +12,9 @@ export function buildServer(db: Db): McpServer {
     {
       instructions:
         "Home manager: tracks products, purchases (price/quantity). " +
-        "Call list_products before add_purchase if unsure of the exact product name.",
+        "Call list_products before add_purchase if unsure of the exact product name. " +
+        "This server is serverless: the first request after a period of inactivity may fail or time out while it wakes up. " +
+        "If a call fails, wait about 1 minute and retry before assuming something is broken.",
     },
   );
 
@@ -27,10 +29,10 @@ export function buildServer(db: Db): McpServer {
   mcp.registerTool(
     "add_product",
     {
-      description: "Create a product (a package). Put the description in the name, e.g. 'Coca Cola 355ml x 24 pz'. The category is created if missing.",
-      inputSchema: { name: Name, category: Name.optional() },
+      description: "Create a product (a package). Put the description in the name, e.g. 'Coca Cola 355ml x 24 pz'. The category is created if missing. Optional `notes` for extra details.",
+      inputSchema: { name: Name, category: Name.optional(), notes: z.string().optional() },
     },
-    async ({ name, category }) => out(await s.addProduct(db, name, category)),
+    async ({ name, category, notes }) => out(await s.addProduct(db, name, category, notes)),
   );
 
   mcp.registerTool(

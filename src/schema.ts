@@ -12,6 +12,7 @@ export const categories = pgTable("categories", {
 export const products = pgTable("products", {
   id: integer().primaryKey().generatedAlwaysAsIdentity(),
   name: text().notNull().unique(),
+  notes: text(),
   categoryId: integer("category_id").references(() => categories.id, { onDelete: "set null" }),
 });
 
