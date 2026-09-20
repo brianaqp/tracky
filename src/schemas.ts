@@ -8,19 +8,11 @@ const IsoDate = z.iso.datetime({ local: true, offset: true }).or(z.iso.date());
 
 export const PurchaseIn = z.object({
   product: ProductRef,
-  quantity: Positive,
+  quantity: z.number().int().positive(),
   total_price: Money,
-  store: z.string().optional(),
   notes: z.string().optional(),
   purchased_at: IsoDate.optional(),
 });
 export type PurchaseIn = z.infer<typeof PurchaseIn>;
-
-export const ConsumptionIn = z.object({
-  product: ProductRef,
-  quantity: Positive,
-  consumed_at: IsoDate.optional(),
-});
-export type ConsumptionIn = z.infer<typeof ConsumptionIn>;
 
 export { IsoDate };
