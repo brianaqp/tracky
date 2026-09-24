@@ -1,7 +1,17 @@
 {
   "name": "tracky",
   "version": "0.1.0",
+  "description": "Home-manager MCP server for tracking products and purchases (price/quantity), built with Bun, Drizzle and Postgres.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/brianaqp/tracky"
+  },
+  "author": "brianaqp",
   "type": "module",
+  "engines": {
+    "bun": ">=1.4.0"
+  },
   "scripts": {
     "start": "bun src/index.ts",
     "test": "bun test",
