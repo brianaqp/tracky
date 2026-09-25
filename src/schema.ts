@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { check, index, integer, numeric, pgTable, text } from "drizzle-orm/pg-core";
+import { check, index, integer, numeric, pgTable, text, unique } from "drizzle-orm/pg-core";
 
 const now = sql`to_char(now() at time zone 'utc', 'YYYY-MM-DD"T"HH24:MI:SS')`;
 
@@ -32,4 +32,13 @@ export const purchases = pgTable(
     check("ck_purchases_price_nonneg", sql`${t.price} >= 0`),
     index("ix_purchases_product_date").on(t.productId, t.purchasedAt),
   ],
+);
+
+export const wishlist = pgTable(
+  "wishlist",
+  {
+    id: integer().primaryKey().generatedAlwaysAsIdentity(),
+    productId: integer("product_id").notNull().references(() => products.id, { onDelete: "cascade" }),
+  },
+  (t) => [unique("ux_wishlist_product").on(t.productId)],
 );

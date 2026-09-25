@@ -1,7 +1,7 @@
 /** Business logic. Plain functions over a Drizzle db; no MCP here. */
 import { and, desc, eq, gte, lt, sql } from "drizzle-orm";
 import type { Db } from "./db";
-import { categories, products, purchases } from "./schema";
+import { categories, products, purchases, wishlist } from "./schema";
 import type { PurchaseIn } from "./schemas";
 
 const unitPrice = (price: string, qty: number) => (Number(price) / qty).toFixed(2);
@@ -54,6 +54,21 @@ export function listProducts(db: Db, category?: string | null, search?: string |
     .from(products)
     .leftJoin(categories, eq(products.categoryId, categories.id))
     .where(and(...conds))
+    .orderBy(products.name);
+}
+
+export async function addProductToWishlist(db: Db, productId: number) {
+  const prod = await resolveProduct(db, productId);
+  await db.insert(wishlist).values({ productId: prod.id }).onConflictDoNothing();
+  return { id: prod.id, name: prod.name };
+}
+
+export function listWishlist(db: Db) {
+  return db
+    .select({ productId: products.id, name: products.name, notes: products.notes, category: categories.name })
+    .from(wishlist)
+    .innerJoin(products, eq(wishlist.productId, products.id))
+    .leftJoin(categories, eq(products.categoryId, categories.id))
     .orderBy(products.name);
 }
 

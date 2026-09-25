@@ -45,6 +45,21 @@ export function buildServer(db: Db): McpServer {
   );
 
   mcp.registerTool(
+    "add_product_to_wishlist",
+    {
+      description: "Add an existing product to the general wishlist by its id. Idempotent.",
+      inputSchema: { productId: z.number().int() },
+    },
+    async ({ productId }) => out(await s.addProductToWishlist(db, productId)),
+  );
+
+  mcp.registerTool(
+    "list_wishlist",
+    { description: "List all products currently on the general wishlist." },
+    async () => out(await s.listWishlist(db)),
+  );
+
+  mcp.registerTool(
     "add_purchase",
     {
       description:
