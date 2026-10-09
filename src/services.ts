@@ -1,8 +1,8 @@
 /** Business logic. Plain functions over a Drizzle db; no MCP here. */
 import { and, desc, eq, gte, lt, sql } from "drizzle-orm";
 import type { Db } from "./db";
-import { categories, products, purchases, wishlist } from "./schema";
-import type { PurchaseIn } from "./schemas";
+import { categories, expenses, products, purchases, wishlist } from "./schema";
+import type { ExpenseIn, PurchaseIn } from "./schemas";
 
 const unitPrice = (price: string, qty: number) => (Number(price) / qty).toFixed(2);
 const now = () => new Date().toISOString().slice(0, 19);
@@ -84,6 +84,17 @@ export async function addPurchase(db: Db, d: PurchaseIn) {
     id, product: prod.name, quantity: d.quantity,
     total_price: price, unit_price: unitPrice(price, d.quantity), purchased_at: when,
   };
+}
+
+export async function addExpense(db: Db, d: ExpenseIn) {
+  const when = d.spent_at ?? now();
+  const cid = d.category ? await categoryId(db, d.category) : null;
+  const amount = d.amount.toFixed(2);
+  const [{ id }] = await db
+    .insert(expenses)
+    .values({ name: d.name, amount, categoryId: cid, spentAt: when })
+    .returning({ id: expenses.id }) as [{ id: number }];
+  return { id, name: d.name, amount, category: d.category ?? null, spent_at: when };
 }
 
 export async function priceHistory(db: Db, product: string | number, limit: number) {

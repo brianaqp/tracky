@@ -15,4 +15,12 @@ export const PurchaseIn = z.object({
 });
 export type PurchaseIn = z.infer<typeof PurchaseIn>;
 
+export const ExpenseIn = z.object({
+  name: Name,
+  amount: Money,
+  category: Name.optional(),
+  spent_at: IsoDate.optional(),
+});
+export type ExpenseIn = z.infer<typeof ExpenseIn>;
+
 export { IsoDate };

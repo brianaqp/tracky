@@ -2,7 +2,7 @@ import { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import type { Db } from "./db";
 import * as s from "./services";
-import { IsoDate, Name, ProductRef, PurchaseIn } from "./schemas";
+import { ExpenseIn, IsoDate, Name, ProductRef, PurchaseIn } from "./schemas";
 
 const out = async (data: unknown) => ({ content: [{ type: "text" as const, text: JSON.stringify(data) }] });
 
@@ -68,6 +68,17 @@ export function buildServer(db: Db): McpServer {
       inputSchema: PurchaseIn.shape,
     },
     async (args) => out(await s.addPurchase(db, args)),
+  );
+
+  mcp.registerTool(
+    "add_expense",
+    {
+      description:
+        "Record a general expense that is not a product purchase (e.g. rent, electricity, a haircut). " +
+        "`amount` is the total paid. The category is created if missing. `spent_at` defaults to now.",
+      inputSchema: ExpenseIn.shape,
+    },
+    async (args) => out(await s.addExpense(db, args)),
   );
 
   mcp.registerTool(

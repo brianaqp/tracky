@@ -42,3 +42,19 @@ export const wishlist = pgTable(
   },
   (t) => [unique("ux_wishlist_product").on(t.productId)],
 );
+
+// General expenses that are not product purchases (rent, utilities, services...).
+export const expenses = pgTable(
+  "expenses",
+  {
+    id: integer().primaryKey().generatedAlwaysAsIdentity(),
+    name: text().notNull(),
+    amount: numeric({ precision: 12, scale: 2 }).notNull(),
+    categoryId: integer("category_id").references(() => categories.id, { onDelete: "set null" }),
+    spentAt: text("spent_at").notNull().default(now), // ISO 8601, sortable
+  },
+  (t) => [
+    check("ck_expenses_amount_nonneg", sql`${t.amount} >= 0`),
+    index("ix_expenses_date").on(t.spentAt),
+  ],
+);
