@@ -1,5 +1,5 @@
 import { allowToken } from "./config";
-import { makeDb } from "./db";
+
 
 const server = Bun.serve({
   hostname: process.env.HOST ?? "0.0.0.0",
