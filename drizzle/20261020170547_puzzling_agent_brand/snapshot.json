@@ -1,11 +1,20 @@
 {
   "version": "8",
   "dialect": "postgres",
-  "id": "74120f93-f7da-419b-8eeb-9c4f6518d946",
+  "id": "97b0e6d7-7954-413a-9fc5-c7bca4f8fe74",
   "prevIds": [
-    "1affccc7-e1d5-4a83-813d-7ec562738795"
+    "00000000-0000-0000-0000-000000000000"
   ],
   "ddl": [
+    {
+      "values": [
+        "USD",
+        "MXN"
+      ],
+      "name": "currency",
+      "entityType": "enums",
+      "schema": "public"
+    },
     {
       "isRlsEnabled": false,
       "name": "banks",
@@ -14,13 +23,13 @@
     },
     {
       "isRlsEnabled": false,
-      "name": "categories",
+      "name": "creditCards",
       "entityType": "tables",
       "schema": "public"
     },
     {
       "isRlsEnabled": false,
-      "name": "creditCard",
+      "name": "expenseCategories",
       "entityType": "tables",
       "schema": "public"
     },
@@ -32,7 +41,19 @@
     },
     {
       "isRlsEnabled": false,
-      "name": "products",
+      "name": "houseCategories",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "isRlsEnabled": false,
+      "name": "houseProducts",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "isRlsEnabled": false,
+      "name": "incomes",
       "entityType": "tables",
       "schema": "public"
     },
@@ -80,7 +101,7 @@
       "generated": null,
       "identity": {
         "type": "always",
-        "name": "categories_id_seq",
+        "name": "creditCards_id_seq",
         "increment": "1",
         "startWith": "1",
         "minValue": "1",
@@ -91,42 +112,7 @@
       "name": "id",
       "entityType": "columns",
       "schema": "public",
-      "table": "categories"
-    },
-    {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": false,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "name",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "categories"
-    },
-    {
-      "type": "integer",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": {
-        "type": "always",
-        "name": "creditCard_id_seq",
-        "increment": "1",
-        "startWith": "1",
-        "minValue": "1",
-        "maxValue": "2147483647",
-        "cache": 1,
-        "cycle": false
-      },
-      "name": "id",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "creditCard"
+      "table": "creditCards"
     },
     {
       "type": "text",
@@ -139,7 +125,7 @@
       "name": "name",
       "entityType": "columns",
       "schema": "public",
-      "table": "creditCard"
+      "table": "creditCards"
     },
     {
       "type": "smallint",
@@ -149,10 +135,10 @@
       "default": null,
       "generated": null,
       "identity": null,
-      "name": "closingDate",
+      "name": "closingDay",
       "entityType": "columns",
       "schema": "public",
-      "table": "creditCard"
+      "table": "creditCards"
     },
     {
       "type": "smallint",
@@ -165,7 +151,7 @@
       "name": "dueDay",
       "entityType": "columns",
       "schema": "public",
-      "table": "creditCard"
+      "table": "creditCards"
     },
     {
       "type": "integer",
@@ -178,7 +164,42 @@
       "name": "bankId",
       "entityType": "columns",
       "schema": "public",
-      "table": "creditCard"
+      "table": "creditCards"
+    },
+    {
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": {
+        "type": "always",
+        "name": "expenseCategories_id_seq",
+        "increment": "1",
+        "startWith": "1",
+        "minValue": "1",
+        "maxValue": "2147483647",
+        "cache": 1,
+        "cycle": false
+      },
+      "name": "id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "expenseCategories"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "name",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "expenseCategories"
     },
     {
       "type": "integer",
@@ -223,7 +244,7 @@
       "default": null,
       "generated": null,
       "identity": null,
-      "name": "categoryId",
+      "name": "expenseCategoryId",
       "entityType": "columns",
       "schema": "public",
       "table": "expenses"
@@ -237,7 +258,7 @@
       "generated": null,
       "identity": {
         "type": "always",
-        "name": "products_id_seq",
+        "name": "houseCategories_id_seq",
         "increment": "1",
         "startWith": "1",
         "minValue": "1",
@@ -248,7 +269,7 @@
       "name": "id",
       "entityType": "columns",
       "schema": "public",
-      "table": "products"
+      "table": "houseCategories"
     },
     {
       "type": "text",
@@ -261,7 +282,42 @@
       "name": "name",
       "entityType": "columns",
       "schema": "public",
-      "table": "products"
+      "table": "houseCategories"
+    },
+    {
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": {
+        "type": "always",
+        "name": "houseProducts_id_seq",
+        "increment": "1",
+        "startWith": "1",
+        "minValue": "1",
+        "maxValue": "2147483647",
+        "cache": 1,
+        "cycle": false
+      },
+      "name": "id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "houseProducts"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "name",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "houseProducts"
     },
     {
       "type": "text",
@@ -274,7 +330,7 @@
       "name": "notes",
       "entityType": "columns",
       "schema": "public",
-      "table": "products"
+      "table": "houseProducts"
     },
     {
       "type": "integer",
@@ -284,10 +340,71 @@
       "default": null,
       "generated": null,
       "identity": null,
-      "name": "categoryId",
+      "name": "houseCategoryId",
       "entityType": "columns",
       "schema": "public",
-      "table": "products"
+      "table": "houseProducts"
+    },
+    {
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": {
+        "type": "always",
+        "name": "incomes_id_seq",
+        "increment": "1",
+        "startWith": "1",
+        "minValue": "1",
+        "maxValue": "2147483647",
+        "cache": 1,
+        "cycle": false
+      },
+      "name": "id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "incomes"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "name",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "incomes"
+    },
+    {
+      "type": "numeric(12,2)",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "amount",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "incomes"
+    },
+    {
+      "type": "currency",
+      "typeSchema": "public",
+      "notNull": true,
+      "dimensions": 0,
+      "default": "'MXN'",
+      "generated": null,
+      "identity": null,
+      "name": "currency",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "incomes"
     },
     {
       "nameExplicit": false,
@@ -301,24 +418,24 @@
       ],
       "onUpdate": "NO ACTION",
       "onDelete": "NO ACTION",
-      "name": "creditCard_bankId_banks_id_fkey",
+      "name": "creditCards_bankId_banks_id_fkey",
       "entityType": "fks",
       "schema": "public",
-      "table": "creditCard"
+      "table": "creditCards"
     },
     {
       "nameExplicit": false,
       "columns": [
-        "categoryId"
+        "expenseCategoryId"
       ],
       "schemaTo": "public",
-      "tableTo": "categories",
+      "tableTo": "expenseCategories",
       "columnsTo": [
         "id"
       ],
       "onUpdate": "NO ACTION",
       "onDelete": "SET NULL",
-      "name": "expenses_categoryId_categories_id_fkey",
+      "name": "expenses_expenseCategoryId_expenseCategories_id_fkey",
       "entityType": "fks",
       "schema": "public",
       "table": "expenses"
@@ -326,19 +443,19 @@
     {
       "nameExplicit": false,
       "columns": [
-        "categoryId"
+        "houseCategoryId"
       ],
       "schemaTo": "public",
-      "tableTo": "categories",
+      "tableTo": "houseCategories",
       "columnsTo": [
         "id"
       ],
       "onUpdate": "NO ACTION",
       "onDelete": "SET NULL",
-      "name": "products_categoryId_categories_id_fkey",
+      "name": "houseProducts_houseCategoryId_houseCategories_id_fkey",
       "entityType": "fks",
       "schema": "public",
-      "table": "products"
+      "table": "houseProducts"
     },
     {
       "columns": [
@@ -355,9 +472,9 @@
         "id"
       ],
       "nameExplicit": false,
-      "name": "category_pkey",
+      "name": "creditCards_pkey",
       "schema": "public",
-      "table": "categories",
+      "table": "creditCards",
       "entityType": "pks"
     },
     {
@@ -365,9 +482,9 @@
         "id"
       ],
       "nameExplicit": false,
-      "name": "creditCard_pkey",
+      "name": "expenseCategories_pkey",
       "schema": "public",
-      "table": "creditCard",
+      "table": "expenseCategories",
       "entityType": "pks"
     },
     {
@@ -385,24 +502,51 @@
         "id"
       ],
       "nameExplicit": false,
-      "name": "products_pkey",
+      "name": "houseCategories_pkey",
       "schema": "public",
-      "table": "products",
+      "table": "houseCategories",
       "entityType": "pks"
     },
     {
-      "value": "\"closingDate\" between 1 and 31",
-      "name": "closing_date_range",
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "name": "houseProducts_pkey",
+      "schema": "public",
+      "table": "houseProducts",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "name": "incomes_pkey",
+      "schema": "public",
+      "table": "incomes",
+      "entityType": "pks"
+    },
+    {
+      "value": "\"closingDay\" between 1 and 31",
+      "name": "closing_day_range",
       "entityType": "checks",
       "schema": "public",
-      "table": "creditCard"
+      "table": "creditCards"
     },
     {
       "value": "\"dueDay\" between 1 and 31",
-      "name": "due_date_range",
+      "name": "due_day_range",
       "entityType": "checks",
       "schema": "public",
-      "table": "creditCard"
+      "table": "creditCards"
+    },
+    {
+      "value": "\"amount\" > 0",
+      "name": "amount_positive",
+      "entityType": "checks",
+      "schema": "public",
+      "table": "incomes"
     }
   ],
   "renames": []

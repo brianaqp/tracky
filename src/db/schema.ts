@@ -3,22 +3,36 @@ import { check, integer, numeric, pgEnum, pgTable, smallint, text } from "drizzl
 
 export const currencyEnum = pgEnum("currency", ["USD", "MXN"])
 
-export const categories = pgTable("categories", {
+/** House
+ * Products bought for the house, tracked to know how much is spent on each one.
+ * houseCategories: broad groups (dairy, paper, towels, ...)
+ * houseProducts: the specific item inside a category (milk, yogurt, toilet paper, ...)
+ */
+export const houseCategories = pgTable("houseCategories", {
     id: integer().primaryKey().generatedAlwaysAsIdentity(),
     name: text(),
 })
 
-export const products = pgTable("products", {
+export const houseProducts = pgTable("houseProducts", {
     id: integer().primaryKey().generatedAlwaysAsIdentity(),
     name: text(),
     notes: text(),
-    categoryId: integer().references(() => categories.id, { onDelete: "set null" })
+    houseCategoryId: integer().references(() => houseCategories.id, { onDelete: "set null" })
+})
+
+/** Expenses
+ * Everything that is not a house product: electricity, outings, trips, movies, services.
+ * Meant to be fed from account statements and followed long term.
+ */
+export const expenseCategories = pgTable("expenseCategories", {
+    id: integer().primaryKey().generatedAlwaysAsIdentity(),
+    name: text(),
 })
 
 export const expenses = pgTable("expenses", {
     id: integer().primaryKey().generatedAlwaysAsIdentity(),
     name: text(),
-    categoryId: integer().references(() => categories.id, { onDelete: "set null" })
+    expenseCategoryId: integer().references(() => expenseCategories.id, { onDelete: "set null" })
 })
 
 /** Banks */
