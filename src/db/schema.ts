@@ -21,7 +21,7 @@ export const houseProducts = pgTable("houseProducts", {
 })
 
 /** Expenses
- * Everything that is not a house product: electricity, outings, trips, movies, services.
+ * Everything that is a daily live expense: electricity, outings, trips, movies, services.
  * Meant to be fed from account statements and followed long term.
  */
 export const expenseCategories = pgTable("expenseCategories", {
