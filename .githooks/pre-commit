@@ -1,0 +1,8 @@
+#!/bin/sh
+# data/ holds real personal finance data (statements, seeds). It must never be committed.
+if git diff --cached --name-only --diff-filter=ACMR | grep -q '^data/'; then
+  echo "pre-commit: refusing to commit files under data/ (private financial data):" >&2
+  git diff --cached --name-only --diff-filter=ACMR | grep '^data/' >&2
+  echo "Unstage them with: git restore --staged data/" >&2
+  exit 1
+fi

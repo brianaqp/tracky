@@ -1,7 +1,7 @@
 {
   "name": "tracky",
   "version": "0.1.0",
-  "description": "Home-manager MCP server for tracking products and purchases (price/quantity), built with Bun, Drizzle and Postgres.",
+  "description": "Personal finance MCP server: bank statements, installments, budget and purchase tickets. Bun, Drizzle and Postgres.",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -14,20 +14,22 @@
   },
   "scripts": {
     "start": "bun src/index.ts",
+    "dev": "TRACKY_DATABASE_URL=pglite:./.pglite bun --watch src/index.ts",
     "test": "bun test",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
+    "web:dev": "cd web && bun run dev",
     "inspector": "bunx @modelcontextprotocol/inspector"
   },
   "dependencies": {
     "@modelcontextprotocol/server": "^2.0.0",
-    "@neondatabase/serverless": "^1.1.0",
     "dotenv": "^18.0.1",
     "drizzle-orm": "^1.0.0-rc.4",
     "zod": "^4.6.5"
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.8",
+    "@modelcontextprotocol/client": "2.4.0",
     "@types/bun": "^1.4.2",
     "drizzle-kit": "^1.0.0-rc.4",
     "tsx": "^4.23.13",

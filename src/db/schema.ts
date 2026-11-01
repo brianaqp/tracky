@@ -1,65 +1,186 @@
 import { sql } from "drizzle-orm";
-import { check, integer, numeric, pgEnum, pgTable, smallint, text } from "drizzle-orm/pg-core";
+import {
+    type AnyPgColumn,
+    boolean,
+    check,
+    date,
+    index,
+    integer,
+    numeric,
+    pgEnum,
+    snakeCase,
+    smallint,
+    text,
+    timestamp,
+    unique,
+} from "drizzle-orm/pg-core";
 
-export const currencyEnum = pgEnum("currency", ["USD", "MXN"])
+// Columns are camelCase in TS and snake_case in Postgres (snakeCase.table).
+const money = () => numeric({ precision: 12, scale: 2, mode: "string" });
 
-/** House
- * Products bought for the house, tracked to know how much is spent on each one.
- * houseCategories: broad groups (dairy, paper, towels, ...)
- * houseProducts: the specific item inside a category (milk, yogurt, toilet paper, ...)
- */
-export const houseCategories = pgTable("houseCategories", {
+export const currencyEnum = pgEnum("currency", ["MXN", "USD"]);
+
+/** What a movement is. Only purchase, fee and interest count as spending. */
+export const transactionKindEnum = pgEnum("transaction_kind", [
+    "purchase",        // a regular charge (also the full amount of a purchase "a meses")
+    "installment",     // "01 DE 03 ...": a monthly payment of an installment plan, not new spending
+    "payment",         // paying the card
+    "refund",
+    "cash_withdrawal",
+    "fee",
+    "interest",
+]);
+
+/** Banks and what they hold: credit cards, debit accounts and loans. */
+export const banks = snakeCase.table("banks", {
     id: integer().primaryKey().generatedAlwaysAsIdentity(),
-    name: text(),
-})
+    name: text().notNull().unique(),
+});
 
-export const houseProducts = pgTable("houseProducts", {
+export const creditCards = snakeCase.table("credit_cards", {
     id: integer().primaryKey().generatedAlwaysAsIdentity(),
-    name: text(),
-    notes: text(),
-    houseCategoryId: integer().references(() => houseCategories.id, { onDelete: "set null" })
-})
-
-/** Expenses
- * Everything that is a daily live expense: electricity, outings, trips, movies, services.
- * Meant to be fed from account statements and followed long term.
- */
-export const expenseCategories = pgTable("expenseCategories", {
-    id: integer().primaryKey().generatedAlwaysAsIdentity(),
-    name: text(),
-})
-
-export const expenses = pgTable("expenses", {
-    id: integer().primaryKey().generatedAlwaysAsIdentity(),
-    name: text(),
-    expenseCategoryId: integer().references(() => expenseCategories.id, { onDelete: "set null" })
-})
-
-/** Banks */
-export const banks = pgTable("banks", {
-    id: integer().primaryKey().generatedAlwaysAsIdentity(),
-    name: text(),
-})
-
-export const creditCards = pgTable("creditCards", {
-    id: integer().primaryKey().generatedAlwaysAsIdentity(),
+    bankId: integer().notNull().references(() => banks.id, { onDelete: "cascade" }),
     name: text().notNull(),
-    closingDay: smallint().notNull(),
-    dueDay: smallint().notNull(),
-    bankId: integer().references(() => banks.id, { onDelete: "no action" })
-}, (table) => [
-    check("closing_day_range", sql`${table.closingDay} between 1 and 31`),
-    check("due_day_range", sql`${table.dueDay} between 1 and 31`)
-])
+    last4: text(),
+    closingDay: smallint(),
+    dueDay: smallint(),
+    creditLimit: money(),
+    currency: currencyEnum().notNull().default("MXN"),
+}, (t) => [
+    unique("credit_cards_bank_name").on(t.bankId, t.name),
+    check("credit_cards_closing_day_range", sql`${t.closingDay} between 1 and 31`),
+    check("credit_cards_due_day_range", sql`${t.dueDay} between 1 and 31`),
+]);
 
-/** Income
- * Let's assume this is montly and help to know how much money does the user has
- */
-export const incomes = pgTable("incomes", {
+export const debitAccounts = snakeCase.table("debit_accounts", {
     id: integer().primaryKey().generatedAlwaysAsIdentity(),
-    name: text(),
-    amount: numeric({ precision: 12, scale: 2 }).notNull(),
-    currency: currencyEnum().notNull().default("MXN")
-}, (table) => [
-    check("amount_positive", sql`${table.amount} > 0`)
-])
+    bankId: integer().notNull().references(() => banks.id, { onDelete: "cascade" }),
+    name: text().notNull(),
+    last4: text(),
+    currency: currencyEnum().notNull().default("MXN"),
+}, (t) => [unique("debit_accounts_bank_name").on(t.bankId, t.name)]);
+
+export const loans = snakeCase.table("loans", {
+    id: integer().primaryKey().generatedAlwaysAsIdentity(),
+    bankId: integer().notNull().references(() => banks.id, { onDelete: "cascade" }),
+    name: text().notNull(),
+    principal: money().notNull(),
+    monthlyPayment: money().notNull(),
+    termMonths: smallint().notNull(),
+    startDate: date().notNull(), // first payment
+    annualRate: numeric({ precision: 6, scale: 3 }),
+    currency: currencyEnum().notNull().default("MXN"),
+}, (t) => [
+    unique("loans_bank_name").on(t.bankId, t.name),
+    check("loans_term_positive", sql`${t.termMonths} > 0`),
+]);
+
+/** High-level spending categories (Despensa, Servicio, Casa, ...), shared by transactions and the budget. */
+export const categories = snakeCase.table("categories", {
+    id: integer().primaryKey().generatedAlwaysAsIdentity(),
+    name: text().notNull().unique(),
+});
+
+/** One row per imported credit card statement (PDF). Re-importing the same cut-off date is a no-op. */
+export const uploadedStatements = snakeCase.table("uploaded_statements", {
+    id: integer().primaryKey().generatedAlwaysAsIdentity(),
+    creditCardId: integer().notNull().references(() => creditCards.id, { onDelete: "cascade" }),
+    periodStart: date().notNull(),
+    periodEnd: date().notNull(),
+    closingDate: date().notNull(),
+    dueDate: date().notNull(),
+    previousBalance: money(),
+    paymentNoInterest: money(),
+    minimumPayment: money(),
+    uploadedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+}, (t) => [unique("uploaded_statements_card_closing").on(t.creditCardId, t.closingDate)]);
+
+/** Purchases "a meses": one plan, paid in `months` installments starting at `firstPaymentDate`. */
+export const installmentPlans = snakeCase.table("installment_plans", {
+    id: integer().primaryKey().generatedAlwaysAsIdentity(),
+    creditCardId: integer().notNull().references(() => creditCards.id, { onDelete: "cascade" }),
+    purchaseTransactionId: integer().references((): AnyPgColumn => transactions.id, { onDelete: "set null" }),
+    description: text().notNull(),
+    totalAmount: money().notNull(),
+    months: smallint().notNull(),
+    monthlyAmount: money().notNull(),
+    interestRate: numeric({ precision: 6, scale: 3 }).notNull().default("0"),
+    purchaseDate: date().notNull(),
+    firstPaymentDate: date().notNull(),
+}, (t) => [
+    unique("installment_plans_card_purchase").on(t.creditCardId, t.description, t.purchaseDate),
+    check("installment_plans_months_positive", sql`${t.months} > 0`),
+]);
+
+/** Every movement of a card, debit account or loan. `amount` is always positive; `kind` gives its meaning. */
+export const transactions = snakeCase.table("transactions", {
+    id: integer().primaryKey().generatedAlwaysAsIdentity(),
+    creditCardId: integer().references(() => creditCards.id, { onDelete: "cascade" }),
+    debitAccountId: integer().references(() => debitAccounts.id, { onDelete: "cascade" }),
+    loanId: integer().references(() => loans.id, { onDelete: "cascade" }),
+    uploadedStatementId: integer().references(() => uploadedStatements.id, { onDelete: "set null" }),
+    installmentPlanId: integer().references((): AnyPgColumn => installmentPlans.id, { onDelete: "set null" }),
+    installmentNumber: smallint(),
+    operationDate: date().notNull(),
+    chargeDate: date(),
+    description: text().notNull(),
+    amount: money().notNull(),
+    currency: currencyEnum().notNull().default("MXN"),
+    kind: transactionKindEnum().notNull().default("purchase"),
+    categoryId: integer().references(() => categories.id, { onDelete: "set null" }),
+    notes: text(),
+    dedupeKey: text().notNull().unique(),
+}, (t) => [
+    check("transactions_one_source", sql`num_nonnulls(${t.creditCardId}, ${t.debitAccountId}, ${t.loanId}) = 1`),
+    check("transactions_amount_positive", sql`${t.amount} > 0`),
+    index("transactions_operation_date").on(t.operationDate),
+    index("transactions_category").on(t.categoryId),
+]);
+
+/** Budget: recurring monthly expenses planned ahead (the Notion table). */
+export const budgetItems = snakeCase.table("budget_items", {
+    id: integer().primaryKey().generatedAlwaysAsIdentity(),
+    name: text().notNull().unique(),
+    categoryId: integer().references(() => categories.id, { onDelete: "set null" }),
+    amount: money().notNull(),
+    currency: currencyEnum().notNull().default("MXN"),
+    payday: smallint(), // day of the month it is paid (1, 15, ...)
+    creditCardId: integer().references(() => creditCards.id, { onDelete: "set null" }),
+    debitAccountId: integer().references(() => debitAccounts.id, { onDelete: "set null" }),
+    notes: text(),
+    active: boolean().notNull().default(true),
+}, (t) => [
+    check("budget_items_amount_positive", sql`${t.amount} > 0`),
+    check("budget_items_payday_range", sql`${t.payday} between 1 and 31`),
+    check("budget_items_one_source", sql`num_nonnulls(${t.creditCardId}, ${t.debitAccountId}) <= 1`),
+]);
+
+/** Tickets: the line items behind a purchase (a supermarket charge -> milk, apples, ...). */
+export const productCategories = snakeCase.table("product_categories", {
+    id: integer().primaryKey().generatedAlwaysAsIdentity(),
+    name: text().notNull().unique(),
+});
+
+export const products = snakeCase.table("products", {
+    id: integer().primaryKey().generatedAlwaysAsIdentity(),
+    name: text().notNull().unique(),
+    notes: text(),
+    productCategoryId: integer().references(() => productCategories.id, { onDelete: "set null" }),
+});
+
+export const tickets = snakeCase.table("tickets", {
+    id: integer().primaryKey().generatedAlwaysAsIdentity(),
+    store: text().notNull(),
+    purchaseDate: date().notNull(),
+    total: money().notNull(),
+    transactionId: integer().unique().references(() => transactions.id, { onDelete: "set null" }),
+    notes: text(),
+});
+
+export const ticketItems = snakeCase.table("ticket_items", {
+    id: integer().primaryKey().generatedAlwaysAsIdentity(),
+    ticketId: integer().notNull().references(() => tickets.id, { onDelete: "cascade" }),
+    productId: integer().notNull().references(() => products.id, { onDelete: "restrict" }),
+    quantity: numeric({ precision: 10, scale: 3, mode: "number" }).notNull(),
+    total: money().notNull(),
+}, (t) => [check("ticket_items_quantity_positive", sql`${t.quantity} > 0`)]);
