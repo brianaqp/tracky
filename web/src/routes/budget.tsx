@@ -13,7 +13,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
 export default function Budget() {
   const { items, comparison, month } = useLoaderData<typeof loader>();
-  const groups = Map.groupBy(items, (i) => i.category ?? "(sin categoría)");
   const total = items.filter((i) => i.active).reduce((s, i) => s + Number(i.amount), 0);
 
   return (
@@ -23,24 +22,22 @@ export default function Budget() {
         <Card title={`Conceptos mensuales · ${money(total)}`}>
           <table>
             <thead>
-              <tr><th>Concepto</th><th>Tarjeta</th><th>Día de pago</th><th className="num">Monto</th></tr>
+              <tr>
+                <th>Concepto</th><th>Tarjeta</th><th>Día de pago</th><th className="num">Monto</th><th>Notas</th><th>Categoría</th>
+              </tr>
             </thead>
-            {[...groups].map(([category, rows]) => (
-              <tbody key={category}>
-                <tr className="group-row">
-                  <th colSpan={3}>{category}</th>
-                  <th className="num">{money(rows.reduce((s, r) => s + Number(r.amount), 0))}</th>
+            <tbody>
+              {items.map((i) => (
+                <tr key={i.id} className={i.active ? undefined : "inactive"}>
+                  <td>{i.name}</td>
+                  <td className="muted">{i.creditCard ?? i.debitAccount ?? "—"}</td>
+                  <td className="muted">{i.payday ?? "—"}</td>
+                  <td className="num">{money(i.amount)}</td>
+                  <td className="muted">{i.notes ?? "—"}</td>
+                  <td>{i.category ? <span className="tag">{i.category}</span> : <span className="muted">—</span>}</td>
                 </tr>
-                {rows.map((i) => (
-                  <tr key={i.id} className={i.active ? undefined : "inactive"}>
-                    <td>{i.name}</td>
-                    <td className="muted">{i.creditCard ?? i.debitAccount ?? "—"}</td>
-                    <td className="muted">{i.payday ? `Día ${i.payday}` : "—"}</td>
-                    <td className="num">{money(i.amount)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            ))}
+              ))}
+            </tbody>
           </table>
         </Card>
 
