@@ -23,6 +23,6 @@ export function makeHandler(db: Db, token: string) {
     const apiKey = req.headers.get("x-api-key");
     if (!apiKey || !validToken(apiKey, token)) return Response.json({ error: "unauthorized" }, { status: 401 });
 
-    return isMcp ? mcp.fetch(req) : handleApi(db, url);
+    return isMcp ? mcp.fetch(req) : handleApi(db, req);
   };
 }

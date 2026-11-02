@@ -70,6 +70,19 @@ export const BudgetItemIn = z.object({
 });
 export type BudgetItemIn = z.infer<typeof BudgetItemIn>;
 
+export const IncomeIn = z.object({
+  name: Name,
+  amount: Money.describe("Net monthly amount"),
+  currency: Currency.default("MXN"),
+  payday: Day.nullable().default(null).describe("Day of the month it is paid"),
+});
+export type IncomeIn = z.infer<typeof IncomeIn>;
+/** Partial update: only the fields sent change (payday: null clears it). */
+export const IncomePatch = z.object({
+  name: Name, amount: Money, currency: Currency, payday: Day.nullable(),
+}).partial();
+export type IncomePatch = z.infer<typeof IncomePatch>;
+
 export const TicketIn = z.object({
   store: Name,
   purchase_date: IsoDate,

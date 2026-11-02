@@ -40,10 +40,23 @@ export type Ticket = {
   items: { product: string; productCategory: string | null; quantity: number; total: string }[];
 };
 export type ProductGroup = { group: string; total: string; items: number };
+export type Income = { id: number; name: string; amount: string; currency: string; payday: number | null };
 
 export async function get<T>(path: string, params: Record<string, string | undefined> = {}): Promise<T> {
   const qs = new URLSearchParams(Object.entries(params).filter((e): e is [string, string] => !!e[1]));
   const res = await fetch(`/api/${path}${qs.size ? `?${qs}` : ""}`);
   if (!res.ok) throw new Response((await res.json().catch(() => null))?.error ?? res.statusText, { status: res.status });
   return res.json();
+}
+
+/** Writes (POST/PATCH/DELETE). Throws an Error with the server's message so callers can show it inline. */
+export async function send<T>(method: "POST" | "PATCH" | "DELETE", path: string, body?: unknown): Promise<T> {
+  const res = await fetch(`/api/${path}`, {
+    method,
+    headers: body === undefined ? undefined : { "content-type": "application/json" },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  const data = await res.json().catch(() => null);
+  if (!res.ok) throw new Error(data?.error ?? res.statusText);
+  return data;
 }

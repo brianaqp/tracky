@@ -1,10 +1,11 @@
 import { beforeAll, describe, expect, test } from "bun:test";
 import { type Db, makeDb } from "../src/db/connection";
-import { StatementIn, TicketIn } from "../src/schemas";
+import { IncomeIn, StatementIn, TicketIn } from "../src/schemas";
 import { addCreditCard } from "../src/services/accounts";
 import { upsertBudgetItem } from "../src/services/budget";
 import { addMonths } from "../src/services/common";
 import { forecast, installmentStatus, productSpending, spendingSummary } from "../src/services/reports";
+import { addIncome, deleteIncome, listIncomes, updateIncome } from "../src/services/incomes";
 import { addTicket } from "../src/services/tickets";
 import { categorizeTransactions, importStatement, listTransactions } from "../src/services/transactions";
 
@@ -92,4 +93,20 @@ test("addTicket links products to the card movement", async () => {
 test("addMonths clamps to the end of the month", () => {
   expect(addMonths("2026-01-31", 1)).toBe("2026-02-28");
   expect(addMonths("2026-10-22", 3)).toBe("2027-01-22");
+});
+
+describe("incomes", () => {
+  test("add, rename, clear payday and delete; names stay unique", async () => {
+    const a = await addIncome(db, IncomeIn.parse({ name: "Sueldo 15", amount: 1000, payday: 15 }));
+    await addIncome(db, IncomeIn.parse({ name: "Extra", amount: 250.5 }));
+    await expect(addIncome(db, IncomeIn.parse({ name: "sueldo 15", amount: 1 }))).rejects.toThrow("Ya existe");
+    await expect(updateIncome(db, a.id, { name: "Extra" })).rejects.toThrow("Ya existe");
+
+    const renamed = await updateIncome(db, a.id, { name: "Sueldo", payday: null });
+    expect(renamed).toMatchObject({ name: "Sueldo", amount: "1000.00", payday: null, currency: "MXN" });
+    expect((await listIncomes(db)).reduce((s, i) => s + Number(i.amount), 0)).toBe(1250.5);
+
+    await deleteIncome(db, a.id);
+    expect((await listIncomes(db)).map((i) => i.name)).toEqual(["Extra"]);
+  });
 });

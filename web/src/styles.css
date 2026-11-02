@@ -12,6 +12,7 @@
   --series-2: #eb6834; /* categorical slot 2 (orange) */
   --good: #0a7d36;
   --good-bg: #e3f4e8;
+  --bad: #b42318;
   --tag-bg: #efeeea;
   --radius: 10px;
 }
@@ -31,6 +32,7 @@
     --series-2: #d95926;
     --good: #5fcf8a;
     --good-bg: #17301f;
+    --bad: #f07b6b;
     --tag-bg: #2a2a28;
   }
 }
@@ -48,6 +50,7 @@
   --series-2: #d95926;
   --good: #5fcf8a;
   --good-bg: #17301f;
+  --bad: #f07b6b;
   --tag-bg: #2a2a28;
 }
 
@@ -123,6 +126,7 @@ tbody tr:last-child td { border-bottom: 0; }
 tr.inactive td { opacity: 0.5; }
 
 .tag { display: inline-block; font-size: 12px; padding: 1px 8px; border-radius: 999px; background: var(--tag-bg); color: var(--text-secondary); }
+.tag.chip { background: light-dark(hsl(var(--h) 75% 92%), hsl(var(--h) 35% 22%)); color: light-dark(hsl(var(--h) 65% 26%), hsl(var(--h) 70% 78%)); }
 .tag.ok { background: var(--good-bg); color: var(--good); }
 .kind-payment, .kind-refund { color: var(--good); background: var(--good-bg); }
 
@@ -174,3 +178,20 @@ button, .button { cursor: pointer; background: var(--accent); border-color: var(
 dl { display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; margin: 8px 0 0; font-size: 13px; }
 dt { color: var(--text-muted); }
 dd { margin: 0; text-align: right; }
+
+/* Editable sheet (Notion-style tables) */
+.sheet td { vertical-align: middle; }
+.cell { display: block; min-height: 1.5em; margin: -3px -6px; padding: 3px 6px; border-radius: 5px; cursor: text; }
+.cell:hover, .cell:focus-visible { background: var(--tag-bg); outline: none; }
+.cell-input { width: 100%; min-width: 4em; margin: -4px -7px; padding: 3px 6px; background: var(--surface-1); }
+.cell-input.num { text-align: right; }
+.sheet select.cell-input { width: auto; border-color: transparent; background: transparent; cursor: pointer; }
+.sheet select.cell-input:hover, .sheet select.cell-input:focus { border-color: var(--border); }
+.new-row .cell-input { border-color: transparent; background: transparent; }
+.new-row .cell-input:focus { border-color: var(--border); background: var(--surface-1); }
+.row-actions { width: 1%; }
+.row-action { visibility: hidden; background: transparent; border: 0; color: var(--text-muted); padding: 0 6px; font-size: 16px; line-height: 1; }
+.row-action:hover { color: var(--text-primary); }
+tr:hover .row-action, .row-action:focus-visible, .row-action.visible { visibility: visible; }
+.sheet tfoot td { border-top: 1px solid var(--border); border-bottom: 0; font-weight: 650; }
+.form-error { color: var(--bad); font-size: 13px; margin: 10px 0 0; }

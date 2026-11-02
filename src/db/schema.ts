@@ -155,6 +155,18 @@ export const budgetItems = snakeCase.table("budget_items", {
     check("budget_items_one_source", sql`num_nonnulls(${t.creditCardId}, ${t.debitAccountId}) <= 1`),
 ]);
 
+/** Expected monthly income (one row per source/payday). The monthly total is sum(amount). */
+export const incomes = snakeCase.table("incomes", {
+    id: integer().primaryKey().generatedAlwaysAsIdentity(),
+    name: text().notNull().unique(), // "Sueldo", "Freelance"
+    amount: money().notNull(), // net
+    currency: currencyEnum().notNull().default("MXN"),
+    payday: smallint(), // day of the month it is paid (15, 30, ...)
+}, (t) => [
+    check("incomes_amount_positive", sql`${t.amount} > 0`),
+    check("incomes_payday_range", sql`${t.payday} between 1 and 31`),
+]);
+
 /** Tickets: the line items behind a purchase (a supermarket charge -> milk, apples, ...). */
 export const productCategories = snakeCase.table("product_categories", {
     id: integer().primaryKey().generatedAlwaysAsIdentity(),

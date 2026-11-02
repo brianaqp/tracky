@@ -18,6 +18,7 @@
     "test": "bun test",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
+    "db:studio": "TRACKY_DATABASE_URL=pglite:./.pglite drizzle-kit studio",
     "web:dev": "cd web && bun run dev",
     "inspector": "bunx @modelcontextprotocol/inspector"
   },
