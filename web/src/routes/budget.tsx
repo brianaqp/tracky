@@ -1,24 +1,29 @@
 import { Form, type LoaderFunctionArgs, useLoaderData } from "react-router";
-import { type BudgetItem, type BudgetVsActual, get } from "../api";
+import { type BudgetItem, type BudgetVsActual, type Income as IncomeRow, get } from "../api";
+import { BudgetPie, Leftover } from "../components/budget-charts";
 import { Card, Chip, chipHues, money, month as monthLabel } from "../ui";
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const month = new URL(request.url).searchParams.get("month") ?? new Date().toLocaleDateString("en-CA").slice(0, 7);
-  const [items, comparison] = await Promise.all([
+  const [items, comparison, incomes] = await Promise.all([
     get<BudgetItem[]>("budget"),
     get<BudgetVsActual[]>("budget-vs-actual", { month }),
+    get<IncomeRow[]>("incomes"),
   ]);
-  return { items, comparison, month };
+  return { items, comparison, incomes, month };
 }
 
 export default function Budget() {
-  const { items, comparison, month } = useLoaderData<typeof loader>();
+  const { items, comparison, incomes, month } = useLoaderData<typeof loader>();
   const total = items.filter((i) => i.active).reduce((s, i) => s + Number(i.amount), 0);
   const hues = chipHues(items.map((i) => i.category));
 
   return (
     <>
       <h1>Presupuesto</h1>
+      <div className="w-fullzs">
+        <BudgetPie items={items} />
+      </div>
       <div className="w-fullzs">
         <Card title={`Conceptos mensuales · ${money(total)}`}>
           <table>
@@ -41,6 +46,9 @@ export default function Budget() {
             </tbody>
           </table>
         </Card>
+      </div>
+      <div className="w-fullzs">
+        <Leftover items={items} incomes={incomes} />
       </div>
     </>
   );

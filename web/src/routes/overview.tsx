@@ -1,22 +1,20 @@
 import { Link, useLoaderData } from "react-router";
-import { type Bank, type BudgetItem, type ForecastMonth, get, type Group, type Income as IncomeRow, type Installment } from "../api";
-import { Income } from "../components/income";
+import { type Bank, type BudgetItem, type ForecastMonth, get, type Group, type Installment } from "../api";
 import { Bars, Card, date, money, month, Stat } from "../ui";
 
 export async function loader() {
-  const [spending, forecast, installments, budget, accounts, incomes] = await Promise.all([
+  const [spending, forecast, installments, budget, accounts] = await Promise.all([
     get<Group[]>("spending-summary"),
     get<ForecastMonth[]>("forecast", { months: "4" }),
     get<Installment[]>("installments"),
     get<BudgetItem[]>("budget"),
     get<Bank[]>("accounts"),
-    get<IncomeRow[]>("incomes"),
   ]);
-  return { spending, forecast, installments, budget, accounts, incomes };
+  return { spending, forecast, installments, budget, accounts };
 }
 
 export default function Overview() {
-  const { spending, forecast, installments, budget, accounts, incomes } = useLoaderData<typeof loader>();
+  const { spending, forecast, installments, budget, accounts } = useLoaderData<typeof loader>();
   const spent = spending.reduce((s, g) => s + Number(g.total), 0);
   const budgetTotal = budget.filter((b) => b.active).reduce((s, b) => s + Number(b.amount), 0);
   const pending = installments.reduce((s, p) => s + Number(p.remainingAmount), 0);
@@ -36,8 +34,6 @@ export default function Overview() {
           hint={next ? `${next.card} · vence ${date(next.dueDate)}` : "Sin estados de cuenta"}
         />
       </div>
-
-      <Income incomes={incomes} />
 
       <div className="grid-2">
         <Card title="Gasto por categoría" actions={<Link to="/movimientos">Ver movimientos</Link>}>

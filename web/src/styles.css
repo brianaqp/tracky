@@ -195,3 +195,13 @@ dd { margin: 0; text-align: right; }
 tr:hover .row-action, .row-action:focus-visible, .row-action.visible { visibility: visible; }
 .sheet tfoot td { border-top: 1px solid var(--border); border-bottom: 0; font-weight: 650; }
 .form-error { color: var(--bad); font-size: 13px; margin: 10px 0 0; }
+
+/* Budget charts */
+.pie { display: grid; grid-template-columns: minmax(240px, 1fr) minmax(220px, 1fr); gap: 16px; align-items: center; }
+.pie-legend { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; font-size: 13px; }
+.pie-legend li { display: grid; grid-template-columns: 12px 1fr auto auto; gap: 8px; align-items: center; }
+.swatch { width: 10px; height: 10px; border-radius: 50%; }
+@media (max-width: 640px) { .pie { grid-template-columns: 1fr; } }
+.pie-chart { position: relative; }
+.pie-center { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; pointer-events: none; }
+.pie-center strong { font-size: 18px; }
