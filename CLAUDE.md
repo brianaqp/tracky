@@ -36,6 +36,9 @@ ALLOW_TOKEN=<token> bun data/seed.ts       # load the mock data through the MCP 
 - Banks hold `credit_cards`, `debit_accounts` and `loans`; a transaction belongs to exactly one of them (DB check).
 - `transactions.amount` is always positive; `kind` gives the meaning. Spending = purchase + fee + interest − refund. Payments, cash withdrawals and installments are not spending.
 - Purchases "a meses": the full purchase is one `purchase` (counted once), the "01 DE 03 ..." rows are `installment` rows linked to an `installment_plans` row; the forecast uses the plan's pending payments.
-- Re-importing a statement is idempotent through `transactions.dedupe_key` (identical rows get an ordinal).
+- Re-importing a statement is idempotent through `transactions.dedupe_key` (identical rows get an ordinal); rows already recorded by hand with the same key get attached to the statement.
 - Two separate taxonomies: `categories` (high level: Despensa, Servicio...) for transactions and budget; `product_categories` (Lácteos, Fruta...) for ticket items.
 - Budget items mirror the user's Notion table; the per-quincena "half value" is intentionally not stored.
+- Loans are `monthly` or `biweekly` (quincenal: start day and +15 days). `payment`/`term_payments` count payments, not months; payments dated before today count as paid.
+- Próximos gastos (`upcoming_expenses` + items): one-off events; unpaid items enter the forecast in the event's month (overdue ones in the current month).
+- `forecast` is a cash flow: income − (budget + pending installments + loan payments + card statements due that month + próximos gastos), with `net` and `cumulative`.

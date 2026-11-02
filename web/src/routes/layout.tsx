@@ -5,6 +5,7 @@ const NAV = [
   ["/movimientos", "Movimientos"],
   ["/presupuesto", "Presupuesto"],
   ["/ingresos", "Ingresos"],
+  ["/proximos", "Próximos gastos"],
   ["/meses", "Meses"],
   ["/cuentas", "Cuentas"],
   ["/tickets", "Tickets"],

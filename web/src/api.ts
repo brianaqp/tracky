@@ -13,14 +13,27 @@ export type BudgetItem = {
 };
 export type BudgetVsActual = { category: string; budget: string; actual: string; difference: string };
 export type Installment = {
-  id: number; description: string; creditCard: string; totalAmount: string; months: number; monthlyAmount: string;
+  id: number; description: string; creditCard: string; bank: string; category: string | null; totalAmount: string; months: number; monthlyAmount: string;
   purchaseDate: string; firstPaymentDate: string; paidCount: number; paidAmount: string; remainingAmount: string;
   remainingPayments: number; schedule: { number: number; date: string; amount: string; paid: boolean }[];
 };
 export type ForecastMonth = {
-  month: string; budget: string; installmentsTotal: string; loansTotal: string; total: string;
-  installments: { description: string; creditCard: string; number: number; of: number; amount: string; date: string }[];
-  loans: { name: string; amount: string; date: string }[];
+  month: string; income: string; budget: string; installmentsTotal: string; loansTotal: string; cardsTotal: string;
+  upcomingTotal: string; total: string; net: string; cumulative: string;
+  installments: { description: string; creditCard: string; category: string | null; number: number; of: number; amount: string; date: string }[];
+  loans: { name: string; amount: string; date: string; number: number; of: number }[];
+  cards: { creditCard: string; amount: string; date: string }[];
+  upcoming: { id: number; name: string; amount: string; date: string }[];
+};
+export type Loan = {
+  id: number; bank: string; name: string; principal: string; payment: string; termPayments: number;
+  frequency: "monthly" | "biweekly"; startDate: string; annualRate: string | null; currency: string; notes: string | null;
+  monthlyEquivalent: string; totalAmount: string; paidCount: number; remainingPayments: number; remainingAmount: string;
+  nextPayment: string | null; endDate: string; dates: string[];
+};
+export type UpcomingItem = { id: number; upcomingExpenseId: number; name: string; amount: string; paid: boolean };
+export type Upcoming = {
+  id: number; name: string; dueDate: string; notes: string | null; items: UpcomingItem[]; total: string; pending: string;
 };
 export type Statement = {
   id: number; periodStart: string; periodEnd: string; closingDate: string; dueDate: string;
@@ -33,7 +46,10 @@ export type Bank = {
     creditLimit: string | null; latestStatement: Statement | null;
   }[];
   debitAccounts: { id: number; name: string; last4: string | null }[];
-  loans: { id: number; name: string; principal: string; monthlyPayment: string; termMonths: number; startDate: string }[];
+  loans: {
+    id: number; name: string; principal: string; payment: string; termPayments: number; frequency: "monthly" | "biweekly";
+    startDate: string;
+  }[];
 };
 export type Ticket = {
   id: number; store: string; purchaseDate: string; total: string; transactionId: number | null; notes: string | null;

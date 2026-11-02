@@ -46,7 +46,7 @@ export default function Accounts() {
                 <div className="account-head"><strong>{l.name}</strong><span className="muted">Préstamo</span></div>
                 <dl>
                   <dt>Monto</dt><dd>{money(l.principal)}</dd>
-                  <dt>Mensualidad</dt><dd>{money(l.monthlyPayment)} × {l.termMonths}</dd>
+                  <dt>{l.frequency === "biweekly" ? "Quincena" : "Mensualidad"}</dt><dd>{money(l.payment)} × {l.termPayments}</dd>
                 </dl>
               </div>
             ))}

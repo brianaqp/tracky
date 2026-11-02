@@ -1,13 +1,19 @@
 import { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import type { Db } from "../db/connection";
-import { BudgetItemIn, Currency, Day, IsoDate, Money, Name, Ref, StatementIn, TicketIn, TransactionIn, TransactionKind } from "../schemas";
+import {
+  BudgetItemIn, InstallmentPlanPatch, Currency, Day, IsoDate, LoanIn, Money, Name, Ref, StatementIn, TicketIn, TransactionIn, TransactionKind,
+  UpcomingExpenseIn, UpcomingItemIn,
+} from "../schemas";
 import { addCreditCard, addDebitAccount, addLoan, listAccounts } from "../services/accounts";
 import { listBudget, upsertBudgetItem } from "../services/budget";
 import { listCategories } from "../services/common";
-import { budgetVsActual, forecast, installmentStatus, productSpending, spendingSummary } from "../services/reports";
+import { budgetVsActual, forecast, installmentStatus, loanStatus, productSpending, spendingSummary } from "../services/reports";
+import { addUpcoming, addUpcomingItem, deleteUpcoming, listUpcoming, updateUpcomingItem } from "../services/upcoming";
 import { addTicket } from "../services/tickets";
-import { addTransaction, categorizeTransactions, importStatement, listTransactions } from "../services/transactions";
+import {
+  addTransaction, categorizeTransactions, importStatement, listTransactions, updateInstallmentPlan,
+} from "../services/transactions";
 
 /** Tool defintion config */
 export type Tool = Parameters<McpServer["registerTool"]>["1"];
@@ -56,11 +62,10 @@ export function buildServer(db: Db): McpServer {
   mcp.registerTool(
     "add_loan",
     {
-      description: "Create or update a loan (by bank + name). start_date is the first payment date.",
-      inputSchema: {
-        bank: Name, name: Name, principal: Money, monthly_payment: Money, term_months: z.number().int().positive(),
-        start_date: IsoDate, annual_rate: z.number().min(0).optional(), currency: Currency.optional(),
-      },
+      description:
+        "Create or update a loan (by bank + name). Monthly or biweekly (quincenal: two payments a month, 15 days apart). " +
+        "start_date is the date of payment 1; payments before today count as paid.",
+      inputSchema: LoanIn.shape,
     },
     async (args) => out(await addLoan(db, args)),
   );
@@ -157,9 +162,61 @@ export function buildServer(db: Db): McpServer {
   );
 
   mcp.registerTool(
+    "update_installment_plan",
+    {
+      description:
+        "Edit a purchase 'a meses' (id from installment_status): rename it, set its high-level category (also applied " +
+        "to the purchase movement) or move it to another credit card.",
+      inputSchema: { id: z.number().int(), ...InstallmentPlanPatch.shape },
+    },
+    async ({ id, ...patch }) => out(await updateInstallmentPlan(db, id, patch)),
+  );
+
+  mcp.registerTool(
+    "loan_status",
+    { description: "Loans with payments made, remaining payments and amount, next payment and end date." },
+    async () => out(await loanStatus(db)),
+  );
+
+  mcp.registerTool("list_upcoming_expenses", { description: "Próximos gastos: upcoming events with their expenses." },
+    async () => out(await listUpcoming(db)));
+
+  mcp.registerTool(
+    "add_upcoming_expense",
+    {
+      description: "Add a próximo gasto: an upcoming one-off event (trip, Christmas, car repair) with the expenses it brings.",
+      inputSchema: UpcomingExpenseIn.shape,
+    },
+    async (args) => out(await addUpcoming(db, args)),
+  );
+
+  mcp.registerTool(
+    "add_upcoming_expense_item",
+    { description: "Add an expense to an existing próximo gasto.", inputSchema: UpcomingItemIn.shape },
+    async (args) => out(await addUpcomingItem(db, args)),
+  );
+
+  mcp.registerTool(
+    "set_upcoming_item_paid",
+    {
+      description: "Mark an expense of a próximo gasto as paid (or not). Paid items leave the forecast.",
+      inputSchema: { id: z.number().int(), paid: z.boolean() },
+    },
+    async ({ id, paid }) => out(await updateUpcomingItem(db, id, { paid })),
+  );
+
+  mcp.registerTool(
+    "delete_upcoming_expense",
+    { description: "Delete a próximo gasto and its expenses.", inputSchema: { id: z.number().int() } },
+    async ({ id }) => out(await deleteUpcoming(db, id)),
+  );
+
+  mcp.registerTool(
     "forecast",
     {
-      description: "Expected outflow per month: budget + pending installments + loan payments. Starts this month unless `from` is given.",
+      description:
+        "Cash flow per month: income minus budget, pending installments, loan payments, card statements due and " +
+        "próximos gastos; net and cumulative. Starts this month unless `from` is given.",
       inputSchema: { months: z.number().int().min(1).max(24).default(3), from: IsoDate.optional() },
     },
     async (args) => out(await forecast(db, args)),

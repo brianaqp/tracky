@@ -10,6 +10,7 @@ import { ErrorPage, Layout } from "./routes/layout";
 import * as overview from "./routes/overview";
 import * as tickets from "./routes/tickets";
 import * as transactions from "./routes/transactions";
+import * as upcoming from "./routes/upcoming";
 import "./styles.css";
 
 const router = createBrowserRouter([
@@ -22,6 +23,7 @@ const router = createBrowserRouter([
       { path: "movimientos", loader: transactions.loader, Component: transactions.default },
       { path: "presupuesto", loader: budget.loader, Component: budget.default },
       { path: "ingresos", loader: incomes.loader, Component: incomes.default },
+      { path: "proximos", loader: upcoming.loader, Component: upcoming.default },
       { path: "meses", loader: installments.loader, Component: installments.default },
       { path: "cuentas", loader: accounts.loader, Component: accounts.default },
       { path: "tickets", loader: tickets.loader, Component: tickets.default },

@@ -60,19 +60,24 @@ export const debitAccounts = snakeCase.table("debit_accounts", {
     currency: currencyEnum().notNull().default("MXN"),
 }, (t) => [unique("debit_accounts_bank_name").on(t.bankId, t.name)]);
 
+/** How often a loan is paid: monthly, or biweekly ("quincenal": twice a month, ~15 days apart). */
+export const paymentFrequencyEnum = pgEnum("payment_frequency", ["monthly", "biweekly"]);
+
 export const loans = snakeCase.table("loans", {
     id: integer().primaryKey().generatedAlwaysAsIdentity(),
     bankId: integer().notNull().references(() => banks.id, { onDelete: "cascade" }),
     name: text().notNull(),
     principal: money().notNull(),
-    monthlyPayment: money().notNull(),
-    termMonths: smallint().notNull(),
+    payment: money().notNull(), // amount of each payment (monthly or biweekly)
+    termPayments: smallint().notNull(), // number of payments (120 quincenas, 24 meses...)
+    frequency: paymentFrequencyEnum().notNull().default("monthly"),
     startDate: date().notNull(), // first payment
     annualRate: numeric({ precision: 6, scale: 3 }),
     currency: currencyEnum().notNull().default("MXN"),
+    notes: text(),
 }, (t) => [
     unique("loans_bank_name").on(t.bankId, t.name),
-    check("loans_term_positive", sql`${t.termMonths} > 0`),
+    check("loans_term_positive", sql`${t.termPayments} > 0`),
 ]);
 
 /** High-level spending categories (Despensa, Servicio, Casa, ...), shared by transactions and the budget. */
@@ -100,6 +105,7 @@ export const installmentPlans = snakeCase.table("installment_plans", {
     id: integer().primaryKey().generatedAlwaysAsIdentity(),
     creditCardId: integer().notNull().references(() => creditCards.id, { onDelete: "cascade" }),
     purchaseTransactionId: integer().references((): AnyPgColumn => transactions.id, { onDelete: "set null" }),
+    categoryId: integer().references(() => categories.id, { onDelete: "set null" }),
     description: text().notNull(),
     totalAmount: money().notNull(),
     months: smallint().notNull(),
@@ -166,6 +172,22 @@ export const incomes = snakeCase.table("incomes", {
     check("incomes_amount_positive", sql`${t.amount} > 0`),
     check("incomes_payday_range", sql`${t.payday} between 1 and 31`),
 ]);
+
+/** Próximos gastos: a one-off upcoming event (a trip, Christmas, a car repair) and the expenses it will bring. */
+export const upcomingExpenses = snakeCase.table("upcoming_expenses", {
+    id: integer().primaryKey().generatedAlwaysAsIdentity(),
+    name: text().notNull().unique(),
+    dueDate: date().notNull(),
+    notes: text(),
+});
+
+export const upcomingExpenseItems = snakeCase.table("upcoming_expense_items", {
+    id: integer().primaryKey().generatedAlwaysAsIdentity(),
+    upcomingExpenseId: integer().notNull().references(() => upcomingExpenses.id, { onDelete: "cascade" }),
+    name: text().notNull(),
+    amount: money().notNull(),
+    paid: boolean().notNull().default(false),
+}, (t) => [check("upcoming_expense_items_amount_positive", sql`${t.amount} > 0`)]);
 
 /** Tickets: the line items behind a purchase (a supermarket charge -> milk, apples, ...). */
 export const productCategories = snakeCase.table("product_categories", {

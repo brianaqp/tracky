@@ -1,0 +1,2 @@
+ALTER TABLE "installment_plans" ADD COLUMN "category_id" integer;--> statement-breakpoint
+ALTER TABLE "installment_plans" ADD CONSTRAINT "installment_plans_category_id_categories_id_fkey" FOREIGN KEY ("category_id") REFERENCES "categories"("id") ON DELETE SET NULL;

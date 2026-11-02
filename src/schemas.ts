@@ -33,6 +33,7 @@ export const InstallmentPlanIn = z.object({
   months: z.number().int().positive(),
   monthly_amount: Money,
   interest_rate: z.number().min(0).default(0),
+  category: Name.optional().describe("High-level category; defaults to the purchase movement's category"),
   purchase_date: IsoDate,
   first_payment_date: IsoDate.describe("Cut-off date of the statement with payment 1"),
   purchase_index: z.number().int().min(0).optional().describe("Index in `transactions` of the full purchase charge"),
@@ -42,6 +43,14 @@ export const InstallmentPlanIn = z.object({
     .describe("Monthly payments in this statement: index in `transactions` and payment number (\"01 DE 03\" -> 1)"),
 });
 export type InstallmentPlanIn = z.infer<typeof InstallmentPlanIn>;
+
+/** Edit a plan: rename it, set (or clear with null) its category, or move it to another credit card. */
+export const InstallmentPlanPatch = z.object({
+  description: Name,
+  category: Name.nullable(),
+  credit_card: Ref,
+}).partial();
+export type InstallmentPlanPatch = z.infer<typeof InstallmentPlanPatch>;
 
 export const StatementIn = z.object({
   credit_card: Ref,
@@ -99,3 +108,40 @@ export const TicketIn = z.object({
     .min(1),
 });
 export type TicketIn = z.infer<typeof TicketIn>;
+
+export const PaymentFrequency = z.enum(["monthly", "biweekly"]);
+
+export const LoanIn = z.object({
+  bank: Name,
+  name: Name,
+  principal: Money.describe("Amount lent (crédito otorgado / importe)"),
+  payment: Money.describe("Amount of each payment"),
+  term_payments: z.number().int().positive().describe("Number of payments: 120 quincenas, 24 meses..."),
+  frequency: PaymentFrequency.default("monthly").describe("biweekly = quincenal (two payments a month)"),
+  start_date: IsoDate.describe("Date of payment 1"),
+  annual_rate: z.number().min(0).optional().describe("Annual interest rate in percent, e.g. 32.75"),
+  currency: Currency.default("MXN"),
+  notes: z.string().optional(),
+});
+export type LoanIn = z.infer<typeof LoanIn>;
+
+const UpcomingItemFields = z.object({
+  name: Name,
+  amount: Money,
+  paid: z.boolean().default(false),
+});
+
+export const UpcomingExpenseIn = z.object({
+  name: Name.describe("The event: 'Navidad', 'Viaje a Oaxaca', 'Servicio del carro'"),
+  due_date: IsoDate.describe("When the money will be needed"),
+  notes: z.string().nullable().optional(),
+  items: z.array(UpcomingItemFields).default([]).describe("The expenses it brings: boletos, hotel, regalos..."),
+});
+export type UpcomingExpenseIn = z.infer<typeof UpcomingExpenseIn>;
+export const UpcomingExpensePatch = z.object({ name: Name, due_date: IsoDate, notes: z.string().nullable() }).partial();
+export type UpcomingExpensePatch = z.infer<typeof UpcomingExpensePatch>;
+
+export const UpcomingItemIn = UpcomingItemFields.extend({ upcoming_expense_id: z.number().int() });
+export type UpcomingItemIn = z.infer<typeof UpcomingItemIn>;
+export const UpcomingItemPatch = z.object({ name: Name, amount: Money, paid: z.boolean() }).partial();
+export type UpcomingItemPatch = z.infer<typeof UpcomingItemPatch>;

@@ -2,10 +2,11 @@
 import { and, count, desc, eq, gte, inArray, lt, sql, sum } from "drizzle-orm";
 import type { Db } from "../db/connection";
 import {
-  budgetItems, categories, creditCards, installmentPlans, loans, productCategories, products, ticketItems, tickets,
-  transactions,
+  banks, budgetItems, categories, creditCards, incomes, installmentPlans, loans, productCategories, products, ticketItems,
+  tickets, transactions, uploadedStatements,
 } from "../db/schema";
-import { addMonths, money, today } from "./common";
+import { addMonths, money, paymentDates, today } from "./common";
+import { listUpcoming } from "./upcoming";
 
 /** Kinds that are real spending. Installments are excluded: the full purchase was already counted. */
 const SPENDING = ["purchase", "fee", "interest", "refund"] as const;
@@ -50,7 +51,8 @@ export async function productSpending(db: Db, f: { start?: string; end?: string 
 export async function installmentStatus(db: Db) {
   const plans = await db
     .select({
-      id: installmentPlans.id, description: installmentPlans.description, creditCard: creditCards.name,
+      id: installmentPlans.id, description: installmentPlans.description, creditCard: creditCards.name, bank: banks.name,
+      category: categories.name,
       totalAmount: installmentPlans.totalAmount, months: installmentPlans.months,
       monthlyAmount: installmentPlans.monthlyAmount, interestRate: installmentPlans.interestRate,
       purchaseDate: installmentPlans.purchaseDate, firstPaymentDate: installmentPlans.firstPaymentDate,
@@ -59,6 +61,8 @@ export async function installmentStatus(db: Db) {
     })
     .from(installmentPlans)
     .innerJoin(creditCards, eq(installmentPlans.creditCardId, creditCards.id))
+    .innerJoin(banks, eq(creditCards.bankId, banks.id))
+    .leftJoin(categories, eq(installmentPlans.categoryId, categories.id))
     .orderBy(installmentPlans.purchaseDate);
   return plans.map((p) => {
     const total = Number(p.totalAmount);
@@ -80,34 +84,92 @@ export async function installmentStatus(db: Db) {
   });
 }
 
-/** Expected outflow for `months` months from the current one (or `from`): budget + pending installments + loan payments. */
+/** Each loan with its payment schedule; payments dated before `asOf` (default today) count as paid (domiciliados). */
+export async function loanStatus(db: Db, asOf = today()) {
+  const rows = await db
+    .select({
+      id: loans.id, bank: banks.name, name: loans.name, principal: loans.principal, payment: loans.payment,
+      termPayments: loans.termPayments, frequency: loans.frequency, startDate: loans.startDate,
+      annualRate: loans.annualRate, currency: loans.currency, notes: loans.notes,
+    })
+    .from(loans)
+    .innerJoin(banks, eq(loans.bankId, banks.id))
+    .orderBy(loans.startDate);
+  return rows.map((l) => {
+    const dates = paymentDates(l.startDate, l.termPayments, l.frequency);
+    const paidCount = dates.filter((d) => d < asOf).length;
+    const payment = Number(l.payment);
+    return {
+      ...l,
+      monthlyEquivalent: money(l.frequency === "biweekly" ? payment * 2 : payment),
+      totalAmount: money(payment * l.termPayments),
+      paidCount,
+      remainingPayments: l.termPayments - paidCount,
+      remainingAmount: money(payment * (l.termPayments - paidCount)),
+      nextPayment: dates[paidCount] ?? null,
+      endDate: dates.at(-1)!,
+      dates,
+    };
+  });
+}
+
+/**
+ * Cash flow per month for `months` months from the current one (or `from`): expected income minus what goes out:
+ * budget, pending installments "a meses", loan payments, card statements due that month (spending already done)
+ * and the pending items of upcoming expenses (overdue ones land in the first month). `cumulative` adds up `net`.
+ */
 export async function forecast(db: Db, f: { months?: number; from?: string } = {}) {
-  const start = (f.from ?? today()).slice(0, 7);
+  const ref = f.from ?? today();
+  const start = ref.slice(0, 7);
   const monthKeys = Array.from({ length: f.months ?? 3 }, (_, i) => addMonths(`${start}-01`, i).slice(0, 7));
-  const [budget, plans, loanRows] = await Promise.all([
-    db.select({ name: budgetItems.name, amount: budgetItems.amount, category: categories.name })
-      .from(budgetItems).leftJoin(categories, eq(budgetItems.categoryId, categories.id)).where(eq(budgetItems.active, true)),
+  const [budget, plans, loanRows, incomeRows, statements, upcoming] = await Promise.all([
+    db.select({ amount: budgetItems.amount }).from(budgetItems).where(eq(budgetItems.active, true)),
     installmentStatus(db),
-    db.select().from(loans),
+    loanStatus(db, ref),
+    db.select({ amount: incomes.amount }).from(incomes),
+    db.select({
+      creditCard: creditCards.name, dueDate: uploadedStatements.dueDate, amount: uploadedStatements.paymentNoInterest,
+    }).from(uploadedStatements).innerJoin(creditCards, eq(uploadedStatements.creditCardId, creditCards.id)),
+    listUpcoming(db),
   ]);
-  const budgetTotal = budget.reduce((s, b) => s + Number(b.amount), 0);
-  return monthKeys.map((month) => {
+  const sumOf = (xs: { amount: string | null }[]) => xs.reduce((s, x) => s + Number(x.amount ?? 0), 0);
+  const budgetTotal = sumOf(budget);
+  const income = sumOf(incomeRows);
+  let cumulative = 0;
+  return monthKeys.map((month, idx) => {
     const installments = plans.flatMap((p) => p.schedule
       .filter((s) => !s.paid && s.date.startsWith(month))
-      .map((s) => ({ description: p.description, creditCard: p.creditCard, number: s.number, of: p.months, amount: s.amount, date: s.date })));
-    const loanPayments = loanRows.flatMap((l) => Array.from({ length: l.termMonths }, (_, i) => addMonths(l.startDate, i))
-      .filter((d) => d.startsWith(month))
-      .map((date) => ({ name: l.name, amount: l.monthlyPayment, date })));
-    const installmentsTotal = installments.reduce((s, x) => s + Number(x.amount), 0);
-    const loansTotal = loanPayments.reduce((s, x) => s + Number(x.amount), 0);
+      .map((s) => ({ description: p.description, creditCard: p.creditCard, category: p.category, number: s.number, of: p.months, amount: s.amount, date: s.date })));
+    const loanPayments = loanRows.flatMap((l) => l.dates
+      .map((date, i) => ({ name: l.name, amount: l.payment, date, number: i + 1, of: l.termPayments }))
+      .filter((p) => p.date.startsWith(month)));
+    const cards = statements
+      .filter((s) => s.dueDate.startsWith(month) && Number(s.amount ?? 0) > 0)
+      .map((s) => ({ creditCard: s.creditCard, amount: s.amount!, date: s.dueDate }));
+    const upcomingHere = upcoming
+      .filter((u) => Number(u.pending) > 0 && (u.dueDate.startsWith(month) || (idx === 0 && u.dueDate.slice(0, 7) < month)))
+      .map((u) => ({ id: u.id, name: u.name, amount: u.pending, date: u.dueDate }));
+    const installmentsTotal = sumOf(installments);
+    const loansTotal = sumOf(loanPayments);
+    const cardsTotal = sumOf(cards);
+    const upcomingTotal = sumOf(upcomingHere);
+    const total = budgetTotal + installmentsTotal + loansTotal + cardsTotal + upcomingTotal;
+    cumulative += income - total;
     return {
       month,
+      income: money(income),
       budget: money(budgetTotal),
       installments,
       installmentsTotal: money(installmentsTotal),
       loans: loanPayments,
       loansTotal: money(loansTotal),
-      total: money(budgetTotal + installmentsTotal + loansTotal),
+      cards,
+      cardsTotal: money(cardsTotal),
+      upcoming: upcomingHere,
+      upcomingTotal: money(upcomingTotal),
+      total: money(total),
+      net: money(income - total),
+      cumulative: money(cumulative),
     };
   });
 }

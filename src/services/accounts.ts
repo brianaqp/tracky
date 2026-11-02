@@ -2,6 +2,7 @@
 import { eq, sql } from "drizzle-orm";
 import type { Db } from "../db/connection";
 import { banks, creditCards, debitAccounts, loans, uploadedStatements } from "../db/schema";
+import type { LoanIn } from "../schemas";
 import { lower, money } from "./common";
 
 type Currency = "MXN" | "USD";
@@ -35,14 +36,11 @@ export async function addDebitAccount(db: Db, d: { bank: string; name: string; l
   return row!;
 }
 
-export async function addLoan(db: Db, d: {
-  bank: string; name: string; principal: number; monthly_payment: number; term_months: number;
-  start_date: string; annual_rate?: number; currency?: Currency;
-}) {
+export async function addLoan(db: Db, d: LoanIn) {
   const values = {
-    bankId: await bankId(db, d.bank), name: d.name, principal: money(d.principal),
-    monthlyPayment: money(d.monthly_payment), termMonths: d.term_months, startDate: d.start_date,
-    annualRate: d.annual_rate?.toString(), currency: d.currency,
+    bankId: await bankId(db, d.bank), name: d.name, principal: money(d.principal), payment: money(d.payment),
+    termPayments: d.term_payments, frequency: d.frequency, startDate: d.start_date,
+    annualRate: d.annual_rate?.toString() ?? null, currency: d.currency, notes: d.notes ?? null,
   };
   const [row] = await db.insert(loans).values(values)
     .onConflictDoUpdate({ target: [loans.bankId, loans.name], set: values })

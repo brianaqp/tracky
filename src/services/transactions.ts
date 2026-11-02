@@ -2,7 +2,7 @@
 import { and, desc, eq, gte, inArray, isNull, lt, sql } from "drizzle-orm";
 import type { Db } from "../db/connection";
 import { categories, creditCards, debitAccounts, installmentPlans, loans, transactions, uploadedStatements } from "../db/schema";
-import type { InstallmentPlanIn, StatementIn, TransactionIn } from "../schemas";
+import type { InstallmentPlanIn, InstallmentPlanPatch, StatementIn, TransactionIn } from "../schemas";
 import { categoryId, creditCardId, debitAccountId, lower, loanId, money } from "./common";
 
 type Source = { creditCardId?: number; debitAccountId?: number; loanId?: number };
@@ -39,7 +39,12 @@ async function insertTransactions(db: Db, source: Source, rows: TransactionIn[],
       inserted++;
       ids.push(row.id);
     } else {
-      const [existing] = await db.select({ id: transactions.id }).from(transactions).where(eq(transactions.dedupeKey, key));
+      const [existing] = await db.select({ id: transactions.id, uploadedStatementId: transactions.uploadedStatementId })
+        .from(transactions).where(eq(transactions.dedupeKey, key));
+      // A movement first recorded by hand (e.g. from a CSV export) gets attached to the statement that later lists it.
+      if (uploadedStatementId && existing!.uploadedStatementId === null) {
+        await db.update(transactions).set({ uploadedStatementId }).where(eq(transactions.id, existing!.id));
+      }
       ids.push(existing!.id);
     }
   }
@@ -53,8 +58,13 @@ async function upsertPlan(db: Db, cardId: number, p: InstallmentPlanIn, ids: num
     if (id === undefined) throw new Error(`Installment plan '${p.description}': no transaction at index ${i}.`);
     return id;
   };
+  // Category: the one given, else the purchase movement's (kept as is on re-import when neither is known).
+  const purchaseId = p.purchase_index === undefined ? undefined : at(p.purchase_index);
+  const [purchase] = purchaseId === undefined ? []
+    : await db.select({ categoryId: transactions.categoryId }).from(transactions).where(eq(transactions.id, purchaseId));
+  const catId = p.category ? await categoryId(db, p.category) : purchase?.categoryId ?? undefined;
   const values = {
-    creditCardId: cardId, description: p.description, totalAmount: money(p.total_amount), months: p.months,
+    creditCardId: cardId, description: p.description, ...(catId === undefined ? {} : { categoryId: catId }), totalAmount: money(p.total_amount), months: p.months,
     monthlyAmount: money(p.monthly_amount), interestRate: p.interest_rate.toString(),
     purchaseDate: p.purchase_date, firstPaymentDate: p.first_payment_date,
     ...(p.purchase_index === undefined ? {} : { purchaseTransactionId: at(p.purchase_index) }),
@@ -71,6 +81,21 @@ async function upsertPlan(db: Db, cardId: number, p: InstallmentPlanIn, ids: num
       .where(eq(transactions.id, at(pay.index)));
   }
   return { id: plan!.id, description: p.description };
+}
+
+/** Edits an installment plan; with a category, the purchase movement gets it too. */
+export async function updateInstallmentPlan(db: Db, id: number, d: InstallmentPlanPatch) {
+  const catId = d.category === undefined ? undefined : d.category === null ? null : await categoryId(db, d.category);
+  const [plan] = await db.update(installmentPlans).set({
+    description: d.description,
+    categoryId: catId,
+    creditCardId: d.credit_card === undefined ? undefined : await creditCardId(db, d.credit_card),
+  }).where(eq(installmentPlans.id, id)).returning();
+  if (!plan) throw new Error(`Compra a meses ${id} no encontrada.`);
+  if (catId && plan.purchaseTransactionId) {
+    await db.update(transactions).set({ categoryId: catId }).where(eq(transactions.id, plan.purchaseTransactionId));
+  }
+  return plan;
 }
 
 /** Stores a credit card statement, its movements and its installment plans. Idempotent. */

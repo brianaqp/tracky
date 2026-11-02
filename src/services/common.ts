@@ -44,3 +44,24 @@ export function addMonths(iso: string, n: number): string {
 
 /** Today as YYYY-MM-DD in the server's local time zone (set TZ, e.g. America/Mexico_City). */
 export const today = () => new Date().toLocaleDateString("en-CA");
+
+/** The same month as `iso` with the day set to `day`, clamped to the month's length. */
+function withDay(iso: string, day: number): string {
+  const [y, m] = iso.split("-").map(Number) as [number, number];
+  const last = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  return `${iso.slice(0, 8)}${String(Math.min(day, last)).padStart(2, "0")}`;
+}
+
+/**
+ * Payment dates of a loan. Monthly: same day every month. Biweekly ("quincenal"): two payments a month, the start day
+ * and 15 days apart (1 → 1 and 16; 15 → 15 and 30, clamped to month end; 20 → 20 and the 5th of the next month).
+ */
+export function paymentDates(start: string, count: number, frequency: "monthly" | "biweekly"): string[] {
+  if (frequency === "monthly") return Array.from({ length: count }, (_, i) => addMonths(start, i));
+  const day = Number(start.slice(8, 10));
+  return Array.from({ length: count }, (_, i) => {
+    const k = Math.floor(i / 2);
+    if (i % 2 === 0) return addMonths(start, k);
+    return day <= 15 ? withDay(addMonths(start, k), day + 15) : withDay(addMonths(withDay(start, 1), k + 1), day - 15);
+  });
+}

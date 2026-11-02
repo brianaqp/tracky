@@ -1,13 +1,18 @@
 import { beforeAll, describe, expect, test } from "bun:test";
 import { type Db, makeDb } from "../src/db/connection";
-import { IncomeIn, StatementIn, TicketIn } from "../src/schemas";
-import { addCreditCard } from "../src/services/accounts";
+import { eq } from "drizzle-orm";
+import { transactions } from "../src/db/schema";
+import { IncomeIn, LoanIn, StatementIn, TicketIn, TransactionIn, UpcomingExpenseIn } from "../src/schemas";
+import { addCreditCard, addLoan } from "../src/services/accounts";
 import { upsertBudgetItem } from "../src/services/budget";
-import { addMonths } from "../src/services/common";
-import { forecast, installmentStatus, productSpending, spendingSummary } from "../src/services/reports";
+import { addMonths, paymentDates } from "../src/services/common";
+import { forecast, installmentStatus, loanStatus, productSpending, spendingSummary } from "../src/services/reports";
+import { addUpcoming, listUpcoming, updateUpcomingItem } from "../src/services/upcoming";
 import { addIncome, deleteIncome, listIncomes, updateIncome } from "../src/services/incomes";
 import { addTicket } from "../src/services/tickets";
-import { categorizeTransactions, importStatement, listTransactions } from "../src/services/transactions";
+import {
+  addTransaction, categorizeTransactions, importStatement, listTransactions, updateInstallmentPlan,
+} from "../src/services/transactions";
 
 let db: Db;
 
@@ -48,13 +53,23 @@ describe("importStatement", () => {
 
   test("links installment payments and excludes them from spending", async () => {
     const [plan] = await installmentStatus(db);
-    expect(plan).toMatchObject({ paidCount: 1, remainingPayments: 2, remainingAmount: "6000.01" });
+    expect(plan).toMatchObject({
+      paidCount: 1, remainingPayments: 2, remainingAmount: "6000.01", creditCard: "Platinum", bank: "BBVA", category: "Viajes",
+    });
     expect(plan!.schedule.map((s) => s.amount)).toEqual(["3000.00", "3000.00", "3000.01"]);
 
     const summary = await spendingSummary(db, {});
     expect(summary.find((s) => s.group === "Viajes")?.total).toBe("9000.01");
     expect(summary.reduce((s, r) => s + Number(r.total), 0)).toBeCloseTo(1500 + 2 * 500 + 9000.01);
   });
+});
+
+test("updateInstallmentPlan renames, recategorizes the plan and its purchase", async () => {
+  const [plan] = await installmentStatus(db);
+  await updateInstallmentPlan(db, plan!.id, { description: "Vuelos", category: "Transporte" });
+  expect((await installmentStatus(db))[0]).toMatchObject({ description: "Vuelos", category: "Transporte" });
+  expect((await listTransactions(db, { category: "Transporte" })).map((t) => t.description)).toEqual(["AEROLINEA A 03 MESES S/I"]);
+  await updateInstallmentPlan(db, plan!.id, { description: "Aerolinea", category: "Viajes" });
 });
 
 test("categorizeTransactions creates categories and updates rows", async () => {
@@ -108,5 +123,49 @@ describe("incomes", () => {
 
     await deleteIncome(db, a.id);
     expect((await listIncomes(db)).map((i) => i.name)).toEqual(["Extra"]);
+  });
+});
+
+test("a statement adopts movements recorded by hand before it", async () => {
+  await addCreditCard(db, { bank: "Banco", name: "Otra" });
+  const row = { operation_date: "2026-10-01", description: "CAFE", amount: 80 };
+  const manual = await addTransaction(db, { credit_card: "Otra" }, TransactionIn.parse(row));
+  const imported = await importStatement(db, StatementIn.parse({
+    credit_card: "Otra", period_start: "2026-09-18", period_end: "2026-10-18", closing_date: "2026-10-18",
+    due_date: "2026-11-09", transactions: [row],
+  }));
+  expect(imported).toMatchObject({ inserted: 0, skipped: 1, transactionIds: [manual.id] });
+  const [linked] = await db.select({ s: transactions.uploadedStatementId }).from(transactions).where(eq(transactions.id, manual.id!));
+  expect(linked!.s).toBe(imported.uploadedStatementId);
+});
+
+test("paymentDates: monthly and biweekly (quincenal) schedules", () => {
+  expect(paymentDates("2026-10-22", 3, "monthly")).toEqual(["2026-10-22", "2026-11-22", "2026-12-22"]);
+  expect(paymentDates("2026-10-01", 4, "biweekly")).toEqual(["2026-10-01", "2026-10-16", "2026-11-01", "2026-11-16"]);
+  expect(paymentDates("2027-01-15", 4, "biweekly")).toEqual(["2027-01-15", "2027-01-30", "2027-02-15", "2027-02-28"]);
+  expect(paymentDates("2026-10-20", 3, "biweekly")).toEqual(["2026-10-20", "2026-11-05", "2026-11-20"]);
+});
+
+describe("cash flow", () => {
+  test("loans, upcoming expenses and income feed the forecast", async () => {
+    await addLoan(db, LoanIn.parse({
+      bank: "Banco", name: "Préstamo", principal: 10000, payment: 500, term_payments: 24, frequency: "biweekly",
+      start_date: "2026-10-01",
+    }));
+    const [loan] = await loanStatus(db, "2026-11-01");
+    expect(loan).toMatchObject({ paidCount: 2, remainingPayments: 22, remainingAmount: "11000.00", nextPayment: "2026-11-01", monthlyEquivalent: "1000.00" });
+
+    const trip = await addUpcoming(db, UpcomingExpenseIn.parse({
+      name: "Viaje", due_date: "2026-12-20", items: [{ name: "Vuelos", amount: 4000 }, { name: "Hotel", amount: 3000 }],
+    }));
+    const [u] = await listUpcoming(db);
+    await updateUpcomingItem(db, u!.items[1]!.id, { paid: true });
+    expect((await listUpcoming(db))[0]).toMatchObject({ id: trip.id, total: "7000.00", pending: "4000.00" });
+
+    const months = await forecast(db, { from: "2026-11-01", months: 2 });
+    const income = (await listIncomes(db)).reduce((s, i) => s + Number(i.amount), 0);
+    expect(months[0]).toMatchObject({ loansTotal: "1000.00", upcomingTotal: "0.00", income: income.toFixed(2) });
+    expect(months[1]).toMatchObject({ loansTotal: "1000.00", upcomingTotal: "4000.00" });
+    expect(Number(months[1]!.cumulative)).toBeCloseTo(Number(months[0]!.net) + Number(months[1]!.net));
   });
 });
