@@ -1,6 +1,6 @@
-/** Budget charts: spending plan by category (pie) and income vs. budget (free = income − budget). */
+/** Budget chart: spending plan by category (donut). */
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
-import type { BudgetItem, Income } from "../api";
+import type { BudgetItem } from "../api";
 import { Card, chipHues, money } from "../ui";
 
 const sum = (xs: { amount: string }[]) => xs.reduce((s, x) => s + Number(x.amount), 0);
@@ -39,25 +39,6 @@ export function BudgetPie({ items }: { items: BudgetItem[] }) {
           ))}
         </ul>
       </div>
-    </Card>
-  );
-}
-
-export function Leftover({ items, incomes }: { items: BudgetItem[]; incomes: Income[] }) {
-  const income = sum(incomes.filter((i) => i.currency === "MXN"));
-  const budget = sum(items.filter((i) => i.active && i.currency === "MXN"));
-  const free = income - budget;
-  return (
-    <Card title="Comparativa mensual">
-      <table>
-        <tbody>
-          <tr><td>Salario mensual</td><td className="num">{money(income)}</td></tr>
-          <tr><td>Presupuesto</td><td className="num">− {money(budget)}</td></tr>
-        </tbody>
-        <tfoot>
-          <tr><td>Libre</td><td className="num" style={{ color: free < 0 ? "var(--bad)" : "var(--good)" }}>{money(free)}</td></tr>
-        </tfoot>
-      </table>
     </Card>
   );
 }
