@@ -1,19 +1,20 @@
 import { Form, type LoaderFunctionArgs, useLoaderData } from "react-router";
-import { type BudgetItem, type BudgetVsActual, get } from "../api";
+import { type BudgetItem, type BudgetVsActual, get, type Income } from "../api";
 import { BudgetPie } from "../components/budget-charts";
 import { Card, Chip, chipHues, money, month as monthLabel } from "../ui";
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const month = new URL(request.url).searchParams.get("month") ?? new Date().toLocaleDateString("en-CA").slice(0, 7);
-  const [items, comparison] = await Promise.all([
+  const [items, comparison, incomes] = await Promise.all([
     get<BudgetItem[]>("budget"),
     get<BudgetVsActual[]>("budget-vs-actual", { month }),
+    get<Income[]>("incomes"),
   ]);
-  return { items, comparison, month };
+  return { items, comparison, incomes, month };
 }
 
 export default function Budget() {
-  const { items, comparison, month } = useLoaderData<typeof loader>();
+  const { items, comparison, incomes, month } = useLoaderData<typeof loader>();
   const total = items.filter((i) => i.active).reduce((s, i) => s + Number(i.amount), 0);
   const hues = chipHues(items.map((i) => i.category));
 
@@ -21,7 +22,7 @@ export default function Budget() {
     <>
       <h1>Presupuesto</h1>
       <div className="w-fullzs">
-        <BudgetPie items={items} />
+        <BudgetPie items={items} incomes={incomes} />
       </div>
       <div className="w-fullzs">
         <Card title={`Conceptos mensuales · ${money(total)}`}>
