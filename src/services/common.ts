@@ -1,6 +1,6 @@
 import { eq, sql, type AnyColumn } from "drizzle-orm";
 import type { Db } from "../db/connection";
-import { categories, creditCards, debitAccounts, loans } from "../db/schema";
+import { categories, creditCards, debitAccounts, incomes, loans } from "../db/schema";
 
 export const lower = (col: AnyColumn) => sql`lower(${col})`;
 export const money = (n: number) => n.toFixed(2);
@@ -17,7 +17,7 @@ export function listCategories(db: Db) {
   return db.select().from(categories).orderBy(categories.name);
 }
 
-type Named = typeof creditCards | typeof debitAccounts | typeof loans;
+type Named = typeof creditCards | typeof debitAccounts | typeof loans | typeof incomes;
 
 async function resolve(db: Db, table: Named, label: string, ref: number | string): Promise<number> {
   const [row] = await db
@@ -32,6 +32,7 @@ async function resolve(db: Db, table: Named, label: string, ref: number | string
 export const creditCardId = (db: Db, ref: number | string) => resolve(db, creditCards, "Credit card", ref);
 export const debitAccountId = (db: Db, ref: number | string) => resolve(db, debitAccounts, "Debit account", ref);
 export const loanId = (db: Db, ref: number | string) => resolve(db, loans, "Loan", ref);
+export const incomeId = (db: Db, ref: number | string) => resolve(db, incomes, "Income", ref);
 
 /** Adds `n` months to an ISO date, clamping the day to the month's length. */
 export function addMonths(iso: string, n: number): string {

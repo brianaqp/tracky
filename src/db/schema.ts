@@ -161,7 +161,10 @@ export const budgetItems = snakeCase.table("budget_items", {
     check("budget_items_one_source", sql`num_nonnulls(${t.creditCardId}, ${t.debitAccountId}) <= 1`),
 ]);
 
-/** Expected monthly income (one row per source/payday). The monthly total is sum(amount). */
+/**
+ * Income approximation: what each source is expected to pay per month (one row per source/payday). The expected
+ * monthly total is sum(amount); what really arrived is recorded in `income_items`.
+ */
 export const incomes = snakeCase.table("incomes", {
     id: integer().primaryKey().generatedAlwaysAsIdentity(),
     name: text().notNull().unique(), // "Sueldo", "Freelance"
@@ -171,6 +174,20 @@ export const incomes = snakeCase.table("incomes", {
 }, (t) => [
     check("incomes_amount_positive", sql`${t.amount} > 0`),
     check("incomes_payday_range", sql`${t.payday} between 1 and 31`),
+]);
+
+/** A real, dated deposit (abono) to an account, optionally tied to the income approximation it fulfils. */
+export const incomeItems = snakeCase.table("income_items", {
+    id: integer().primaryKey().generatedAlwaysAsIdentity(),
+    incomeId: integer().references(() => incomes.id, { onDelete: "set null" }), // null: an extra, unplanned deposit
+    debitAccountId: integer().references(() => debitAccounts.id, { onDelete: "set null" }),
+    date: date().notNull(),
+    amount: money().notNull(),
+    currency: currencyEnum().notNull().default("MXN"),
+    notes: text(),
+}, (t) => [
+    check("income_items_amount_positive", sql`${t.amount} > 0`),
+    index("income_items_date").on(t.date),
 ]);
 
 /** Próximos gastos: a one-off upcoming event (a trip, Christmas, a car repair) and the expenses it will bring. */

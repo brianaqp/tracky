@@ -2,7 +2,7 @@
 import { and, count, desc, eq, gte, inArray, lt, sql, sum } from "drizzle-orm";
 import type { Db } from "../db/connection";
 import {
-  banks, budgetItems, categories, creditCards, incomes, installmentPlans, loans, productCategories, products, ticketItems,
+  banks, budgetItems, categories, creditCards, incomeItems, incomes, installmentPlans, loans, productCategories, products, ticketItems,
   tickets, transactions, uploadedStatements,
 } from "../db/schema";
 import { addMonths, money, paymentDates, today } from "./common";
@@ -114,7 +114,9 @@ export async function loanStatus(db: Db, asOf = today()) {
 }
 
 /**
- * Cash flow per month for `months` months from the current one (or `from`): expected income minus what goes out:
+ * Cash flow per month for `months` months from the current one (or `from`): income minus what goes out. Income is
+ * the approximation, except in the first month: the deposits received plus what each approximation still has to pay
+ * (approximation − its deposits, never below 0). Outgoings:
  * budget, pending installments "a meses", loan payments, card statements due that month (spending already done)
  * and the pending items of upcoming expenses (overdue ones land in the first month). `cumulative` adds up `net`.
  */
@@ -122,11 +124,13 @@ export async function forecast(db: Db, f: { months?: number; from?: string } = {
   const ref = f.from ?? today();
   const start = ref.slice(0, 7);
   const monthKeys = Array.from({ length: f.months ?? 3 }, (_, i) => addMonths(`${start}-01`, i).slice(0, 7));
-  const [budget, plans, loanRows, incomeRows, statements, upcoming] = await Promise.all([
+  const [budget, plans, loanRows, incomeRows, received, statements, upcoming] = await Promise.all([
     db.select({ amount: budgetItems.amount }).from(budgetItems).where(eq(budgetItems.active, true)),
     installmentStatus(db),
     loanStatus(db, ref),
-    db.select({ amount: incomes.amount }).from(incomes),
+    db.select({ id: incomes.id, amount: incomes.amount }).from(incomes),
+    db.select({ incomeId: incomeItems.incomeId, amount: incomeItems.amount, date: incomeItems.date }).from(incomeItems)
+      .where(and(gte(incomeItems.date, `${start}-01`), lt(incomeItems.date, addMonths(`${start}-01`, 1)))),
     db.select({
       creditCard: creditCards.name, dueDate: uploadedStatements.dueDate, amount: uploadedStatements.paymentNoInterest,
     }).from(uploadedStatements).innerJoin(creditCards, eq(uploadedStatements.creditCardId, creditCards.id)),
@@ -134,7 +138,7 @@ export async function forecast(db: Db, f: { months?: number; from?: string } = {
   ]);
   const sumOf = (xs: { amount: string | null }[]) => xs.reduce((s, x) => s + Number(x.amount ?? 0), 0);
   const budgetTotal = sumOf(budget);
-  const income = sumOf(incomeRows);
+  const expected = sumOf(incomeRows);
   let cumulative = 0;
   return monthKeys.map((month, idx) => {
     const installments = plans.flatMap((p) => p.schedule
@@ -153,11 +157,18 @@ export async function forecast(db: Db, f: { months?: number; from?: string } = {
     const loansTotal = sumOf(loanPayments);
     const cardsTotal = sumOf(cards);
     const upcomingTotal = sumOf(upcomingHere);
+    const receivedHere = received.filter((r) => r.date.startsWith(month));
+    const incomeReceived = sumOf(receivedHere);
+    const stillDue = incomeRows.reduce((s, i) =>
+      s + Math.max(0, Number(i.amount) - sumOf(receivedHere.filter((r) => r.incomeId === i.id))), 0);
+    const income = idx === 0 ? incomeReceived + stillDue : expected;
     const total = budgetTotal + installmentsTotal + loansTotal + cardsTotal + upcomingTotal;
     cumulative += income - total;
     return {
       month,
       income: money(income),
+      incomeExpected: money(expected),
+      incomeReceived: money(incomeReceived),
       budget: money(budgetTotal),
       installments,
       installmentsTotal: money(installmentsTotal),

@@ -41,4 +41,5 @@ ALLOW_TOKEN=<token> bun data/seed.ts       # load the mock data through the MCP 
 - Budget items mirror the user's Notion table; the per-quincena "half value" is intentionally not stored.
 - Loans are `monthly` or `biweekly` (quincenal: start day and +15 days). `payment`/`term_payments` count payments, not months; payments dated before today count as paid.
 - Próximos gastos (`upcoming_expenses` + items): one-off events; unpaid items enter the forecast in the event's month (overdue ones in the current month).
+- Income has two layers: `incomes` is the approximation (expected monthly amount per source) and `income_items` are the real dated deposits (abonos), optionally linked to an approximation and a debit account. In the forecast's first month income = deposits + what each approximation still owes (never below 0); later months use the approximation.
 - `forecast` is a cash flow: income − (budget + pending installments + loan payments + card statements due that month + próximos gastos), with `net` and `cumulative`.

@@ -92,6 +92,21 @@ export const IncomePatch = z.object({
 }).partial();
 export type IncomePatch = z.infer<typeof IncomePatch>;
 
+export const IncomeItemIn = z.object({
+  date: IsoDate.describe("Day the money arrived"),
+  amount: Money,
+  income: Ref.optional().describe("The income approximation it fulfils (id or name); omit for an extra deposit"),
+  debit_account: Ref.optional().describe("Account it was deposited to (id or name)"),
+  currency: Currency.default("MXN"),
+  notes: z.string().optional(),
+});
+export type IncomeItemIn = z.infer<typeof IncomeItemIn>;
+/** Partial update: only the fields sent change (null clears income, debit_account or notes). */
+export const IncomeItemPatch = z.object({
+  date: IsoDate, amount: Money, income: Ref.nullable(), debit_account: Ref.nullable(), currency: Currency, notes: z.string().nullable(),
+}).partial();
+export type IncomeItemPatch = z.infer<typeof IncomeItemPatch>;
+
 export const TicketIn = z.object({
   store: Name,
   purchase_date: IsoDate,

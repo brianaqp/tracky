@@ -1,11 +1,13 @@
 /** JSON API for the dashboard (web/). Same services as the MCP tools. Reads are GET /api/<route>; writes are listed in `writes`. */
 import { z } from "zod";
 import type { Db } from "./db/connection";
-import { IncomeIn, IncomePatch, InstallmentPlanPatch, UpcomingExpenseIn, UpcomingExpensePatch, UpcomingItemIn, UpcomingItemPatch } from "./schemas";
+import { IncomeIn, IncomeItemIn, IncomeItemPatch, IncomePatch, InstallmentPlanPatch, UpcomingExpenseIn, UpcomingExpensePatch, UpcomingItemIn, UpcomingItemPatch } from "./schemas";
 import { listAccounts, listStatements } from "./services/accounts";
 import { listBudget } from "./services/budget";
 import { listCategories, today } from "./services/common";
-import { addIncome, deleteIncome, listIncomes, updateIncome } from "./services/incomes";
+import {
+  addIncome, addIncomeItem, deleteIncome, deleteIncomeItem, listIncomeItems, listIncomes, updateIncome, updateIncomeItem,
+} from "./services/incomes";
 import { budgetVsActual, forecast, installmentStatus, loanStatus, productSpending, spendingSummary } from "./services/reports";
 import {
   addUpcoming, addUpcomingItem, deleteUpcoming, deleteUpcomingItem, listUpcoming, updateUpcoming, updateUpcomingItem,
@@ -25,7 +27,8 @@ const routes: Record<string, (db: Db, q: Query) => Promise<unknown>> = {
     uncategorized: q.get("uncategorized") === "true",
   }),
   budget: (db) => listBudget(db),
-  incomes: (db) => listIncomes(db),
+  incomes: (db, q) => listIncomes(db, opt(q, "month")),
+  "income-items": (db, q) => listIncomeItems(db, { month: opt(q, "month") }),
   tickets: (db) => listTickets(db),
   installments: (db) => installmentStatus(db),
   loans: (db) => loanStatus(db),
@@ -43,6 +46,9 @@ const writes: Record<string, (db: Db, body: unknown, id: number) => Promise<unkn
   "POST incomes": (db, body) => addIncome(db, IncomeIn.parse(body)),
   "PATCH incomes": (db, body, id) => updateIncome(db, id, IncomePatch.parse(body)),
   "DELETE incomes": (db, _body, id) => deleteIncome(db, id),
+  "POST income-items": (db, body) => addIncomeItem(db, IncomeItemIn.parse(body)),
+  "PATCH income-items": (db, body, id) => updateIncomeItem(db, id, IncomeItemPatch.parse(body)),
+  "DELETE income-items": (db, _body, id) => deleteIncomeItem(db, id),
   "PATCH installments": (db, body, id) => updateInstallmentPlan(db, id, InstallmentPlanPatch.parse(body)),
   "POST upcoming": (db, body) => addUpcoming(db, UpcomingExpenseIn.parse(body)),
   "PATCH upcoming": (db, body, id) => updateUpcoming(db, id, UpcomingExpensePatch.parse(body)),

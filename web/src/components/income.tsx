@@ -1,4 +1,7 @@
-/** Ingresos: a live, Notion-style table. Each row is one income; edits save per cell, the total recalculates. */
+/**
+ * Ingresos (aproximación): a live, Notion-style table. Each row is one expected income; edits save per cell, the total
+ * recalculates. "Recibido" is what its deposits (abonos) add up to in the selected month.
+ */
 import { type FormEvent, useEffect, useState } from "react";
 import { useRevalidator } from "react-router";
 import { type Income as IncomeRow, send } from "../api";
@@ -20,7 +23,7 @@ function parseAmount(v: string): number {
   return n;
 }
 
-export function Income({ incomes }: { incomes: IncomeRow[] }) {
+export function Income({ incomes, monthLabel }: { incomes: IncomeRow[]; monthLabel: string }) {
   const revalidator = useRevalidator();
   const [rows, setRows] = useState(incomes);
   const [draft, setDraft] = useState(EMPTY);
@@ -83,12 +86,12 @@ export function Income({ incomes }: { incomes: IncomeRow[] }) {
   })).filter((t) => t.count > 0 || t.currency === "MXN");
 
   return (
-    <Card title="Ingresos">
+    <Card title="Aproximación de ingresos">
       <div className="table-wrap">
         <table className="sheet">
           <thead>
             <tr>
-              <th>Nombre</th><th className="num">Monto</th><th>Moneda</th><th className="num">Día de pago</th><th aria-label="Acciones" />
+              <th>Nombre</th><th className="num">Monto</th><th>Moneda</th><th className="num">Día de pago</th><th className="num">Recibido · {monthLabel}</th><th aria-label="Acciones" />
             </tr>
           </thead>
           <tbody>
@@ -104,6 +107,7 @@ export function Income({ incomes }: { incomes: IncomeRow[] }) {
                   <EditableCell label="día de pago" type="number" value={r.payday == null ? "" : String(r.payday)}
                     onSave={(v) => update(r, { payday: v })} />
                 </td>
+                <td className={`num${Number(r.received) >= Number(r.amount) ? "" : " muted"}`}>{money(r.received, r.currency)}</td>
                 <td className="row-actions">
                   <button type="button" className="row-action" aria-label={`Borrar ${r.name}`} onClick={() => remove(r)}>×</button>
                 </td>
@@ -129,6 +133,7 @@ export function Income({ incomes }: { incomes: IncomeRow[] }) {
                 <input form="new-income" className="cell-input num" type="number" placeholder="Día" aria-label="Día de pago del nuevo ingreso"
                   value={draft.payday} onChange={(e) => setDraft({ ...draft, payday: e.target.value })} />
               </td>
+              <td />
               <td><button form="new-income" type="submit" className="row-action visible" aria-label="Agregar ingreso">↵</button></td>
             </tr>
           </tbody>
@@ -137,7 +142,9 @@ export function Income({ incomes }: { incomes: IncomeRow[] }) {
               <tr key={t.currency}>
                 <td>Total mensual{totals.length > 1 ? ` (${t.currency})` : ""}</td>
                 <td className="num">{money(t.total, t.currency)}</td>
-                <td colSpan={3} className="muted small">{t.count} {t.count === 1 ? "ingreso" : "ingresos"}</td>
+                <td colSpan={2} className="muted small">{t.count} {t.count === 1 ? "ingreso" : "ingresos"}</td>
+                <td className="num">{money(rows.filter((r) => r.currency === t.currency).reduce((s, r) => s + Number(r.received), 0), t.currency)}</td>
+                <td />
               </tr>
             ))}
           </tfoot>

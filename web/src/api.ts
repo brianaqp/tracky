@@ -18,7 +18,7 @@ export type Installment = {
   remainingPayments: number; schedule: { number: number; date: string; amount: string; paid: boolean }[];
 };
 export type ForecastMonth = {
-  month: string; income: string; budget: string; installmentsTotal: string; loansTotal: string; cardsTotal: string;
+  month: string; income: string; incomeExpected: string; incomeReceived: string; budget: string; installmentsTotal: string; loansTotal: string; cardsTotal: string;
   upcomingTotal: string; total: string; net: string; cumulative: string;
   installments: { description: string; creditCard: string; category: string | null; number: number; of: number; amount: string; date: string }[];
   loans: { name: string; amount: string; date: string; number: number; of: number }[];
@@ -56,7 +56,13 @@ export type Ticket = {
   items: { product: string; productCategory: string | null; quantity: number; total: string }[];
 };
 export type ProductGroup = { group: string; total: string; items: number };
-export type Income = { id: number; name: string; amount: string; currency: string; payday: number | null };
+/** Income approximation; `received` is what its deposits add up to in the requested month. */
+export type Income = { id: number; name: string; amount: string; currency: string; payday: number | null; received: string };
+/** A real deposit (abono). */
+export type IncomeItem = {
+  id: number; date: string; amount: string; currency: string; notes: string | null;
+  incomeId: number | null; income: string | null; debitAccountId: number | null; debitAccount: string | null;
+};
 
 export async function get<T>(path: string, params: Record<string, string | undefined> = {}): Promise<T> {
   const qs = new URLSearchParams(Object.entries(params).filter((e): e is [string, string] => !!e[1]));

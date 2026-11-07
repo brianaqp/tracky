@@ -2,13 +2,15 @@ import { beforeAll, describe, expect, test } from "bun:test";
 import { type Db, makeDb } from "../src/db/connection";
 import { eq } from "drizzle-orm";
 import { transactions } from "../src/db/schema";
-import { IncomeIn, LoanIn, StatementIn, TicketIn, TransactionIn, UpcomingExpenseIn } from "../src/schemas";
+import { IncomeIn, IncomeItemIn, LoanIn, StatementIn, TicketIn, TransactionIn, UpcomingExpenseIn } from "../src/schemas";
 import { addCreditCard, addLoan } from "../src/services/accounts";
 import { upsertBudgetItem } from "../src/services/budget";
 import { addMonths, paymentDates } from "../src/services/common";
 import { forecast, installmentStatus, loanStatus, productSpending, spendingSummary } from "../src/services/reports";
 import { addUpcoming, listUpcoming, updateUpcomingItem } from "../src/services/upcoming";
-import { addIncome, deleteIncome, listIncomes, updateIncome } from "../src/services/incomes";
+import {
+  addIncome, addIncomeItem, deleteIncome, deleteIncomeItem, listIncomeItems, listIncomes, updateIncome, updateIncomeItem,
+} from "../src/services/incomes";
 import { addTicket } from "../src/services/tickets";
 import {
   addTransaction, categorizeTransactions, importStatement, listTransactions, updateInstallmentPlan,
@@ -123,6 +125,30 @@ describe("incomes", () => {
 
     await deleteIncome(db, a.id);
     expect((await listIncomes(db)).map((i) => i.name)).toEqual(["Extra"]);
+  });
+
+  test("deposits (income items) count against their approximation in the first forecast month", async () => {
+    const extra = (await listIncomes(db)).find((i) => i.name === "Extra")!;
+    const first = await addIncomeItem(db, IncomeItemIn.parse({ date: "2027-03-02", amount: 100, income: "extra" }));
+    await addIncomeItem(db, IncomeItemIn.parse({ date: "2027-03-10", amount: 50, notes: "Venta" }));
+    await addIncomeItem(db, IncomeItemIn.parse({ date: "2027-04-01", amount: 999, income: extra.id }));
+    await expect(addIncomeItem(db, IncomeItemIn.parse({ date: "2027-03-02", amount: 1, income: "Nope" }))).rejects.toThrow("not found");
+
+    expect((await listIncomes(db, "2027-03")).find((i) => i.id === extra.id)).toMatchObject({ received: "100.00" });
+    const items = await listIncomeItems(db, { month: "2027-03" });
+    expect(items.map((i) => [i.amount, i.income])).toEqual([["100.00", "Extra"], ["50.00", null]]);
+
+    // March: 150 received + 150.50 still due from "Extra"; April: the approximation.
+    const [mar, apr] = await forecast(db, { from: "2027-03-01", months: 2 });
+    expect(mar).toMatchObject({ income: "300.50", incomeReceived: "150.00", incomeExpected: "250.50" });
+    expect(apr).toMatchObject({ income: "250.50" });
+
+    // Receiving more than expected: no negative "still due".
+    await updateIncomeItem(db, first.id, { amount: 400 });
+    expect((await forecast(db, { from: "2027-03-01", months: 1 }))[0]).toMatchObject({ income: "450.00" });
+
+    for (const i of await listIncomeItems(db)) await deleteIncomeItem(db, i.id);
+    expect(await listIncomeItems(db)).toEqual([]);
   });
 });
 

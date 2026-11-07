@@ -2,12 +2,13 @@ import { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import type { Db } from "../db/connection";
 import {
-  BudgetItemIn, InstallmentPlanPatch, Currency, Day, IsoDate, LoanIn, Money, Name, Ref, StatementIn, TicketIn, TransactionIn, TransactionKind,
+  BudgetItemIn, IncomeIn, IncomeItemIn, InstallmentPlanPatch, Currency, Day, IsoDate, LoanIn, Money, Name, Ref, StatementIn, TicketIn, TransactionIn, TransactionKind,
   UpcomingExpenseIn, UpcomingItemIn,
 } from "../schemas";
 import { addCreditCard, addDebitAccount, addLoan, listAccounts } from "../services/accounts";
 import { listBudget, upsertBudgetItem } from "../services/budget";
 import { listCategories } from "../services/common";
+import { addIncome, addIncomeItem, listIncomeItems, listIncomes } from "../services/incomes";
 import { budgetVsActual, forecast, installmentStatus, loanStatus, productSpending, spendingSummary } from "../services/reports";
 import { addUpcoming, addUpcomingItem, deleteUpcoming, listUpcoming, updateUpcomingItem } from "../services/upcoming";
 import { addTicket } from "../services/tickets";
@@ -209,6 +210,41 @@ export function buildServer(db: Db): McpServer {
     "delete_upcoming_expense",
     { description: "Delete a próximo gasto and its expenses.", inputSchema: { id: z.number().int() } },
     async ({ id }) => out(await deleteUpcoming(db, id)),
+  );
+
+  mcp.registerTool(
+    "list_incomes",
+    {
+      description: "Income approximations (expected monthly amount per source) with what was received for each in a month.",
+      inputSchema: { month: z.string().regex(/^\d{4}-\d{2}$/).optional().describe("YYYY-MM, default this month") },
+    },
+    async ({ month }) => out(await listIncomes(db, month)),
+  );
+
+  mcp.registerTool(
+    "add_income",
+    { description: "Add an income approximation: a source and its expected net monthly amount.", inputSchema: IncomeIn.shape },
+    async (args) => out(await addIncome(db, args)),
+  );
+
+  mcp.registerTool(
+    "add_income_item",
+    {
+      description:
+        "Record a real deposit (abono) to an account, tied to the income approximation it fulfils (or none for an " +
+        "extra deposit). The forecast uses deposits for past and current months.",
+      inputSchema: IncomeItemIn.shape,
+    },
+    async (args) => out(await addIncomeItem(db, args)),
+  );
+
+  mcp.registerTool(
+    "list_income_items",
+    {
+      description: "Deposits (abonos) received, optionally for one month.",
+      inputSchema: { month: z.string().regex(/^\d{4}-\d{2}$/).optional().describe("YYYY-MM") },
+    },
+    async ({ month }) => out(await listIncomeItems(db, { month })),
   );
 
   mcp.registerTool(
