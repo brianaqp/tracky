@@ -44,6 +44,21 @@ export const InstallmentPlanIn = z.object({
 });
 export type InstallmentPlanIn = z.infer<typeof InstallmentPlanIn>;
 
+/** A purchase 'a meses' recorded by hand (no statement yet): the full purchase plus its plan. */
+export const ManualInstallmentPlanIn = z.object({
+  credit_card: Ref,
+  description: Name,
+  total_amount: Money,
+  months: z.number().int().positive(),
+  monthly_amount: Money.optional().describe("Defaults to total_amount / months (the last payment absorbs rounding)"),
+  interest_rate: z.number().min(0).default(0),
+  category: Name.optional().describe("High-level category, e.g. Despensa. Created if missing"),
+  purchase_date: IsoDate,
+  first_payment_date: IsoDate.describe("Date of payment 1; the rest follow monthly"),
+  notes: z.string().optional().describe("Stored on the purchase movement"),
+});
+export type ManualInstallmentPlanIn = z.infer<typeof ManualInstallmentPlanIn>;
+
 /** Edit a plan: rename it, set (or clear with null) its category, or move it to another credit card. */
 export const InstallmentPlanPatch = z.object({
   description: Name,

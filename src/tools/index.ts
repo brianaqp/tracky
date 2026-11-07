@@ -2,7 +2,7 @@ import { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import type { Db } from "../db/connection";
 import {
-  BudgetItemIn, IncomeIn, IncomeItemIn, InstallmentPlanPatch, Currency, Day, IsoDate, LoanIn, Money, Name, Ref, StatementIn, TicketIn, TransactionIn, TransactionKind,
+  BudgetItemIn, IncomeIn, IncomeItemIn, InstallmentPlanPatch, ManualInstallmentPlanIn, Currency, Day, IsoDate, LoanIn, Money, Name, Ref, StatementIn, TicketIn, TransactionIn, TransactionKind,
   UpcomingExpenseIn, UpcomingItemIn,
 } from "../schemas";
 import { addCreditCard, addDebitAccount, addLoan, listAccounts } from "../services/accounts";
@@ -13,7 +13,7 @@ import { budgetVsActual, forecast, installmentStatus, loanStatus, productSpendin
 import { addUpcoming, addUpcomingItem, deleteUpcoming, listUpcoming, updateUpcomingItem } from "../services/upcoming";
 import { addTicket } from "../services/tickets";
 import {
-  addTransaction, categorizeTransactions, importStatement, listTransactions, updateInstallmentPlan,
+  addInstallmentPlan, addTransaction, categorizeTransactions, importStatement, listTransactions, updateInstallmentPlan,
 } from "../services/transactions";
 
 /** Tool defintion config */
@@ -160,6 +160,17 @@ export function buildServer(db: Db): McpServer {
     "installment_status",
     { description: "Purchases 'a meses': paid and remaining payments with their schedule." },
     async () => out(await installmentStatus(db)),
+  );
+
+  mcp.registerTool(
+    "add_installment_plan",
+    {
+      description:
+        "Record a purchase 'a meses' by hand, before any statement shows it: the full purchase (counted once as " +
+        "spending) and its monthly payments for the forecast. Importing the statement later updates the same plan.",
+      inputSchema: ManualInstallmentPlanIn.shape,
+    },
+    async (args) => out(await addInstallmentPlan(db, args)),
   );
 
   mcp.registerTool(

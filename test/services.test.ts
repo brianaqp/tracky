@@ -2,7 +2,7 @@ import { beforeAll, describe, expect, test } from "bun:test";
 import { type Db, makeDb } from "../src/db/connection";
 import { eq } from "drizzle-orm";
 import { transactions } from "../src/db/schema";
-import { IncomeIn, IncomeItemIn, LoanIn, StatementIn, TicketIn, TransactionIn, UpcomingExpenseIn } from "../src/schemas";
+import { IncomeIn, IncomeItemIn, LoanIn, ManualInstallmentPlanIn, StatementIn, TicketIn, TransactionIn, UpcomingExpenseIn } from "../src/schemas";
 import { addCreditCard, addLoan } from "../src/services/accounts";
 import { upsertBudgetItem } from "../src/services/budget";
 import { addMonths, paymentDates } from "../src/services/common";
@@ -13,7 +13,7 @@ import {
 } from "../src/services/incomes";
 import { addTicket } from "../src/services/tickets";
 import {
-  addTransaction, categorizeTransactions, importStatement, listTransactions, updateInstallmentPlan,
+  addInstallmentPlan, addTransaction, categorizeTransactions, importStatement, listTransactions, updateInstallmentPlan,
 } from "../src/services/transactions";
 
 let db: Db;
@@ -194,4 +194,23 @@ describe("cash flow", () => {
     expect(months[1]).toMatchObject({ loansTotal: "1000.00", upcomingTotal: "4000.00" });
     expect(Number(months[1]!.cumulative)).toBeCloseTo(Number(months[0]!.net) + Number(months[1]!.net));
   });
+});
+
+test("addInstallmentPlan records the purchase once and schedules its payments", async () => {
+  const plan = await addInstallmentPlan(db, ManualInstallmentPlanIn.parse({
+    credit_card: "Platinum", description: "Telefono", total_amount: 1000, months: 3, category: "Tecnología",
+    purchase_date: "2027-03-05", first_payment_date: "2027-04-05", notes: "a corregir",
+  }));
+  const status = (await installmentStatus(db)).find((p) => p.id === plan.id)!;
+  expect(status).toMatchObject({ monthlyAmount: "333.33", category: "Tecnología", paidCount: 0, remainingAmount: "1000.00" });
+  expect(status.schedule.map((s) => [s.date, s.amount])).toEqual([
+    ["2027-04-05", "333.33"], ["2027-05-05", "333.33"], ["2027-06-05", "333.34"],
+  ]);
+  const [purchase] = await listTransactions(db, { start: "2027-03-01", end: "2027-04-01" });
+  expect(purchase).toMatchObject({ description: "Telefono", amount: "1000.00", kind: "purchase", notes: "a corregir" });
+  // idempotent: same card, description and date updates the same plan
+  expect((await addInstallmentPlan(db, ManualInstallmentPlanIn.parse({
+    credit_card: "Platinum", description: "Telefono", total_amount: 1000, months: 3,
+    purchase_date: "2027-03-05", first_payment_date: "2027-04-05",
+  }))).id).toBe(plan.id);
 });

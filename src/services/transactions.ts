@@ -2,7 +2,7 @@
 import { and, desc, eq, gte, inArray, isNull, lt, sql } from "drizzle-orm";
 import type { Db } from "../db/connection";
 import { categories, creditCards, debitAccounts, installmentPlans, loans, transactions, uploadedStatements } from "../db/schema";
-import type { InstallmentPlanIn, InstallmentPlanPatch, StatementIn, TransactionIn } from "../schemas";
+import type { InstallmentPlanIn, ManualInstallmentPlanIn, InstallmentPlanPatch, StatementIn, TransactionIn } from "../schemas";
 import { categoryId, creditCardId, debitAccountId, lower, loanId, money } from "./common";
 
 type Source = { creditCardId?: number; debitAccountId?: number; loanId?: number };
@@ -81,6 +81,24 @@ async function upsertPlan(db: Db, cardId: number, p: InstallmentPlanIn, ids: num
       .where(eq(transactions.id, at(pay.index)));
   }
   return { id: plan!.id, description: p.description };
+}
+
+/**
+ * Records a purchase 'a meses' by hand: the full purchase as one `purchase` movement on the card and its plan.
+ * A later statement import with the same card, description and purchase date updates this plan.
+ */
+export async function addInstallmentPlan(db: Db, p: ManualInstallmentPlanIn) {
+  const cardId = await creditCardId(db, p.credit_card);
+  const { ids } = await insertTransactions(db, { creditCardId: cardId }, [{
+    operation_date: p.purchase_date, description: p.description, amount: p.total_amount, kind: "purchase",
+    category: p.category, notes: p.notes,
+  }]);
+  const monthly = p.monthly_amount ?? Math.floor((p.total_amount / p.months) * 100) / 100;
+  return upsertPlan(db, cardId, {
+    description: p.description, total_amount: p.total_amount, months: p.months, monthly_amount: monthly,
+    interest_rate: p.interest_rate, category: p.category, purchase_date: p.purchase_date,
+    first_payment_date: p.first_payment_date, purchase_index: 0, payments: [],
+  }, ids);
 }
 
 /** Edits an installment plan; with a category, the purchase movement gets it too. */
