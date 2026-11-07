@@ -29,6 +29,7 @@ export type Loan = {
   id: number; bank: string; name: string; principal: string; payment: string; termPayments: number;
   frequency: "monthly" | "biweekly"; startDate: string; annualRate: string | null; currency: string; notes: string | null;
   monthlyEquivalent: string; totalAmount: string; paidCount: number; remainingPayments: number; remainingAmount: string;
+  principalBalance: string; interestRemaining: string; impliedAnnualRate: string;
   nextPayment: string | null; endDate: string; dates: string[];
 };
 export type UpcomingItem = { id: number; upcomingExpenseId: number; name: string; amount: string; paid: boolean };

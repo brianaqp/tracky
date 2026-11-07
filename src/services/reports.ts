@@ -84,6 +84,17 @@ export async function installmentStatus(db: Db) {
   });
 }
 
+/** Per-payment rate at which `term` payments of `payment` repay `principal` (bisection); 0 when there is no interest. */
+function impliedRate(principal: number, payment: number, term: number) {
+  if (principal <= 0 || payment * term <= principal) return 0;
+  let lo = 0, hi = 1;
+  for (let i = 0; i < 100; i++) {
+    const r = (lo + hi) / 2;
+    if ((payment * (1 - (1 + r) ** -term)) / r > principal) lo = r; else hi = r;
+  }
+  return (lo + hi) / 2;
+}
+
 /** Each loan with its payment schedule; payments dated before `asOf` (default today) count as paid (domiciliados). */
 export async function loanStatus(db: Db, asOf = today()) {
   const rows = await db
@@ -99,13 +110,20 @@ export async function loanStatus(db: Db, asOf = today()) {
     const dates = paymentDates(l.startDate, l.termPayments, l.frequency);
     const paidCount = dates.filter((d) => d < asOf).length;
     const payment = Number(l.payment);
+    const remaining = l.termPayments - paidCount;
+    // principal still owed = present value of the remaining payments at the rate implied by principal, payment and term
+    const r = impliedRate(Number(l.principal), payment, l.termPayments);
+    const balance = r ? (payment * (1 - (1 + r) ** -remaining)) / r : payment * remaining;
     return {
       ...l,
       monthlyEquivalent: money(l.frequency === "biweekly" ? payment * 2 : payment),
       totalAmount: money(payment * l.termPayments),
       paidCount,
-      remainingPayments: l.termPayments - paidCount,
-      remainingAmount: money(payment * (l.termPayments - paidCount)),
+      remainingPayments: remaining,
+      remainingAmount: money(payment * remaining),
+      principalBalance: money(balance),
+      interestRemaining: money(payment * remaining - balance),
+      impliedAnnualRate: money(r * (l.frequency === "biweekly" ? 24 : 12) * 100),
       nextPayment: dates[paidCount] ?? null,
       endDate: dates.at(-1)!,
       dates,

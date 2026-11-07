@@ -41,7 +41,8 @@ export default function Overview() {
   const [now, next] = forecast;
   const income = n(now?.income ?? 0);
 
-  const loanDebt = loans.reduce((s, l) => s + n(l.remainingAmount), 0);
+  const loanDebt = loans.reduce((s, l) => s + n(l.principalBalance), 0);
+  const loanInterest = loans.reduce((s, l) => s + n(l.interestRemaining), 0);
   const msiDebt = installments.reduce((s, p) => s + n(p.remainingAmount), 0);
   const cardDebt = forecast.flatMap((m) => m.cards).filter((c) => daysUntil(c.date) >= 0).reduce((s, c) => s + n(c.amount), 0);
   const debtLoad = next && income ? (n(next.loansTotal) + n(next.installmentsTotal)) / income : 0;
@@ -78,7 +79,7 @@ export default function Overview() {
         <Stat
           label="Deuda por pagar"
           value={money(loanDebt + msiDebt + cardDebt)}
-          hint={`Préstamos ${compact(loanDebt)} · meses ${compact(msiDebt)} · tarjetas ${compact(cardDebt)}`}
+          hint={`Capital de préstamos ${compact(loanDebt)} · meses ${compact(msiDebt)} · tarjetas ${compact(cardDebt)} · intereses futuros ${compact(loanInterest)} aparte`}
         />
       </div>
 
@@ -288,7 +289,8 @@ function Debts({ loans, installments, income }: { loans: Loan[]; installments: I
           <dl>
             <dt>Pago</dt><dd>{money(l.payment)} × {l.termPayments} · {l.paidCount} hechos</dd>
             <dt>Al mes</dt><dd>{money(l.monthlyEquivalent)}{income ? <span className="muted"> · {pct(n(l.monthlyEquivalent) / income)} del ingreso</span> : null}</dd>
-            <dt>Por pagar</dt><dd><strong>{money(l.remainingAmount)}</strong> <span className="muted">de {money(l.totalAmount)} (prestado {money(l.principal)})</span></dd>
+            <dt>Debes</dt><dd><strong>{money(l.principalBalance)}</strong> <span className="muted">de capital (prestado {money(l.principal)}) · tasa ≈ {n(l.impliedAnnualRate).toFixed(1)}% anual</span></dd>
+            <dt>Por pagar</dt><dd>{money(l.remainingAmount)} <span className="muted">incluye {money(l.interestRemaining)} de intereses · total {money(l.totalAmount)}</span></dd>
             <dt>Siguiente</dt><dd>{l.nextPayment ? `${date(l.nextPayment)} · ${inDays(daysUntil(l.nextPayment))}` : "—"}</dd>
             <dt>Termina</dt><dd>{date(l.endDate)}</dd>
           </dl>
