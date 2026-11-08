@@ -1,0 +1,16 @@
+version: "3"
+
+# Loads ALLOW_TOKEN (and the rest of .env) so the Vite proxy can send x-api-key to the API.
+dotenv: [".env"]
+
+tasks:
+  web:dev:
+    desc: Dashboard on :5173, proxies /api to the server with ALLOW_TOKEN from .env
+    dir: web
+    cmds:
+      - bun run dev
+
+  api:
+    desc: Api server 
+    cmds:
+      - bun start
