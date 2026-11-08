@@ -106,6 +106,9 @@ main.loading { opacity: 0.55; }
 
 .card { background: var(--surface-1); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; min-width: 0; }
 .grid-2 > .card, .grid-3 > .card { margin: 0; }
+.masonry { columns: 2; column-gap: 8px; margin-bottom: 16px; }
+.masonry > .card { break-inside: avoid; margin: 0 0 8px; }
+@media (max-width: 900px) { .masonry { columns: 1; } }
 main > .card { margin-bottom: 16px; }
 .card-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 12px; }
 
@@ -180,6 +183,41 @@ button, .button { cursor: pointer; background: var(--accent); border-color: var(
 
 .progress { height: 8px; border-radius: 4px; background: var(--grid); overflow: hidden; margin-bottom: 8px; }
 .progress span { display: block; height: 100%; border-radius: 0 4px 4px 0; }
+
+/* Installments timeline: label | track | end month; overlays share the track's x via --x (0..1) */
+.tl { --label: 180px; --end: 56px; --gap: 10px; margin-top: 4px; }
+.tl-headline { margin: 0 0 10px; }
+.tl-axis, .tl-rows { position: relative; list-style: none; margin: 0; padding: 0; }
+.tl-axis { height: 18px; font-size: 11px; color: var(--text-muted); }
+.tl-tick, .tl-grid, .tl-today {
+  position: absolute; left: calc(var(--label) + var(--gap) + (100% - var(--label) - var(--end) - 2 * var(--gap)) * var(--x));
+}
+.tl-tick { white-space: nowrap; }
+.tl-grid { top: 0; bottom: 0; width: 1px; background: var(--grid); }
+.tl-today { top: -4px; bottom: 0; width: 2px; margin-left: -1px; background: var(--text-primary); border-radius: 1px; z-index: 1; }
+.tl-row {
+  position: relative; display: grid; grid-template-columns: var(--label) 1fr var(--end); gap: var(--gap); align-items: center;
+  height: 28px; border-radius: 6px;
+}
+.tl-row:hover { background: color-mix(in srgb, var(--bg) 70%, transparent); }
+.tl-label { color: var(--text-secondary); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding-left: 4px; }
+.tl-track { position: relative; height: 10px; }
+.tl-bar { position: absolute; top: 0; height: 10px; }
+.tl-bar.series-1 { border-radius: 4px 0 0 4px; }
+.tl-bar.series-1:only-child, .tl-pending { border-radius: 0 4px 4px 0; }
+.tl-bar.series-1:only-child { border-radius: 4px; }
+.tl-bar.series-1 + .tl-pending { border-left: 2px solid var(--surface-1); }
+.tl-pending:first-child { border-radius: 4px; }
+.tl-pending, .tl-pending-swatch { background: color-mix(in srgb, var(--series-1) 30%, var(--surface-1)); }
+.tl-today-swatch { display: inline-block; width: 2px; height: 12px; background: var(--text-primary); border-radius: 1px; }
+.tl-end { font-size: 12px; color: var(--text-muted); text-align: right; white-space: nowrap; }
+.tl-row[data-tip]:hover::after {
+  content: attr(data-tip);
+  position: absolute; left: calc(var(--label) + var(--gap)); bottom: calc(100% + 2px); z-index: 2;
+  background: var(--text-primary); color: var(--surface-1);
+  font-size: 12px; padding: 4px 8px; border-radius: 6px; white-space: nowrap; pointer-events: none;
+}
+@media (max-width: 640px) { .tl { --label: 96px; --end: 48px; } }
 
 /* Accounts */
 .account { padding: 10px 0; border-top: 1px solid var(--grid); }
