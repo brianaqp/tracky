@@ -47,7 +47,7 @@ export function addMonths(iso: string, n: number): string {
 export const today = () => new Date().toLocaleDateString("en-CA");
 
 /** The same month as `iso` with the day set to `day`, clamped to the month's length. */
-function withDay(iso: string, day: number): string {
+export function withDay(iso: string, day: number): string {
   const [y, m] = iso.split("-").map(Number) as [number, number];
   const last = new Date(Date.UTC(y, m, 0)).getUTCDate();
   return `${iso.slice(0, 8)}${String(Math.min(day, last)).padStart(2, "0")}`;

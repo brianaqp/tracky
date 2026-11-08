@@ -85,7 +85,8 @@ export default function Overview() {
       <Card title="Flujo de efectivo · próximos 12 meses" actions={<span className="muted small">Ingreso vs. salidas por mes</span>}>
         <CashFlowChart months={forecast} />
         <p className="note">
-          «Tarjetas» es el pago para no generar intereses de los estados de cuenta cargados: consumo que ya ocurrió y se paga ese mes.
+          «Tarjetas» es el consumo del ciclo que corta ese mes (se paga a inicios del siguiente): el pago para no generar intereses del
+          estado de cuenta o, sin él, el <Link to="/cuentas">próximo pago</Link> que pusiste a mano sin sus mensualidades (ya están en «A meses»).
           {firstNegative
             ? <> El acumulado queda en negativo en <strong>{month(firstNegative.month)}</strong>: revisa ese mes.</>
             : " El acumulado se mantiene positivo todo el año."}
@@ -237,7 +238,12 @@ function Timeline({ forecast, budget, incomes }: { forecast: ForecastMonth[]; bu
   };
   const events: Event[] = [
     ...forecast.flatMap((m) => [
-      ...m.cards.map((c) => ({ date: c.date, label: `Pago ${c.creditCard}`, detail: "Tarjeta · pago sin intereses", amount: n(c.amount), kind: "out" as const })),
+      ...m.cards.map((c) => ({
+        date: c.date, label: `Pago ${c.creditCard}`, kind: "out" as const, amount: n(c.amount),
+        detail: c.source === "manual"
+          ? `Tarjeta · próximo pago ${money(c.declared)}${n(c.installmentsTotal) ? ` − ${money(c.installmentsTotal)} de meses` : ""}`
+          : "Tarjeta · pago sin intereses",
+      })),
       ...m.loans.map((l) => ({ date: l.date, label: l.name, detail: `Préstamo · ${l.number}/${l.of}`, amount: n(l.amount), kind: "out" as const })),
       ...m.installments.map((i) => ({ date: i.date, label: i.description, detail: `${i.creditCard} · ${i.number}/${i.of} (corte)`, amount: n(i.amount), kind: "out" as const })),
       ...m.upcoming.map((u) => ({ date: u.date, label: u.name, detail: "Próximo gasto", amount: n(u.amount), kind: "out" as const })),

@@ -2,10 +2,10 @@
 import { and, count, desc, eq, gte, inArray, lt, sql, sum } from "drizzle-orm";
 import type { Db } from "../db/connection";
 import {
-  banks, budgetItems, categories, creditCards, incomeItems, incomes, installmentPlans, loans, productCategories, products, ticketItems,
+  banks, budgetItems, cardPayments, categories, creditCards, incomeItems, incomes, installmentPlans, loans, productCategories, products, ticketItems,
   tickets, transactions, uploadedStatements,
 } from "../db/schema";
-import { addMonths, money, paymentDates, today } from "./common";
+import { addMonths, money, paymentDates, today, withDay } from "./common";
 import { listUpcoming } from "./upcoming";
 
 /** Kinds that are real spending. Installments are excluded: the full purchase was already counted. */
@@ -51,7 +51,8 @@ export async function productSpending(db: Db, f: { start?: string; end?: string 
 export async function installmentStatus(db: Db) {
   const plans = await db
     .select({
-      id: installmentPlans.id, description: installmentPlans.description, creditCard: creditCards.name, bank: banks.name,
+      id: installmentPlans.id, description: installmentPlans.description, creditCardId: installmentPlans.creditCardId,
+      creditCard: creditCards.name, bank: banks.name,
       category: categories.name,
       totalAmount: installmentPlans.totalAmount, months: installmentPlans.months,
       monthlyAmount: installmentPlans.monthlyAmount, interestRate: installmentPlans.interestRate,
@@ -113,18 +114,70 @@ export async function loanStatus(db: Db, asOf = today()) {
   });
 }
 
+/** The cut-off (corte) of the cycle paid on `due`: the last `closingDay` before it, or a month before without one. */
+export function closingBefore(due: string, closingDay: number | null): string {
+  if (!closingDay) return addMonths(due, -1);
+  const same = withDay(due, closingDay);
+  return same < due ? same : withDay(addMonths(`${due.slice(0, 8)}01`, -1), closingDay);
+}
+
+/**
+ * Each card's próximo pago (set by hand) with the installments "a meses" inside it: the card's pending payments dated in
+ * the month before the due date (up to it). `rest` = amount − installments, never below 0: what the forecast counts for
+ * the card, since the installments are already counted on their own. `statement` is set when a statement of that card
+ * is due the same month; it then replaces this row in the forecast.
+ */
+export async function cardPaymentStatus(db: Db) {
+  const [rows, plans, statements] = await Promise.all([
+    db.select({
+      id: cardPayments.id, creditCardId: cardPayments.creditCardId, creditCard: creditCards.name, bank: banks.name,
+      closingDay: creditCards.closingDay,
+      dueDate: cardPayments.dueDate, amount: cardPayments.amount, notes: cardPayments.notes, updatedAt: cardPayments.updatedAt,
+    })
+      .from(cardPayments)
+      .innerJoin(creditCards, eq(cardPayments.creditCardId, creditCards.id))
+      .innerJoin(banks, eq(creditCards.bankId, banks.id))
+      .orderBy(cardPayments.dueDate),
+    installmentStatus(db),
+    db.select({ creditCardId: uploadedStatements.creditCardId, dueDate: uploadedStatements.dueDate, amount: uploadedStatements.paymentNoInterest })
+      .from(uploadedStatements),
+  ]);
+  return rows.map((r) => {
+    const from = addMonths(r.dueDate, -1);
+    const installments = plans
+      .filter((p) => p.creditCardId === r.creditCardId)
+      .flatMap((p) => p.schedule
+        .filter((s) => !s.paid && s.date > from && s.date <= r.dueDate)
+        .map((s) => ({ planId: p.id, description: p.description, number: s.number, of: p.months, amount: s.amount, date: s.date })));
+    const included = installments.reduce((s, i) => s + Number(i.amount), 0);
+    const statement = statements.find((s) => s.creditCardId === r.creditCardId && s.dueDate.slice(0, 7) === r.dueDate.slice(0, 7));
+    return {
+      ...r,
+      closingDate: closingBefore(r.dueDate, r.closingDay),
+      installments,
+      installmentsTotal: money(included),
+      rest: money(Math.max(0, Number(r.amount) - included)),
+      /** The installments add up to more than the amount set: the amount is probably outdated. */
+      short: included > Number(r.amount),
+      statement: statement ? { dueDate: statement.dueDate, amount: statement.amount } : null,
+    };
+  });
+}
+
 /**
  * Cash flow per month for `months` months from the current one (or `from`): income minus what goes out. Income is
  * the approximation, except in the first month: the deposits received plus what each approximation still has to pay
  * (approximation − its deposits, never below 0). Outgoings:
- * budget, pending installments "a meses", loan payments, card statements due that month (spending already done)
- * and the pending items of upcoming expenses (overdue ones land in the first month). `cumulative` adds up `net`.
+ * budget, pending installments "a meses", loan payments, card payments of the cycles that close that month (the
+ * statement's pago para no generar intereses or, without one, the próximo pago set by hand minus the installments it
+ * includes, which are already counted on their own; past due ones, and statements older than the card's próximo pago,
+ * count as paid) and the pending items of upcoming expenses (overdue ones land in the first month). `cumulative` adds up `net`.
  */
 export async function forecast(db: Db, f: { months?: number; from?: string } = {}) {
   const ref = f.from ?? today();
   const start = ref.slice(0, 7);
   const monthKeys = Array.from({ length: f.months ?? 3 }, (_, i) => addMonths(`${start}-01`, i).slice(0, 7));
-  const [budget, plans, loanRows, incomeRows, received, statements, upcoming] = await Promise.all([
+  const [budget, plans, loanRows, incomeRows, received, statements, upcoming, manual] = await Promise.all([
     db.select({ amount: budgetItems.amount }).from(budgetItems).where(eq(budgetItems.active, true)),
     installmentStatus(db),
     loanStatus(db, ref),
@@ -132,11 +185,21 @@ export async function forecast(db: Db, f: { months?: number; from?: string } = {
     db.select({ incomeId: incomeItems.incomeId, amount: incomeItems.amount, date: incomeItems.date }).from(incomeItems)
       .where(and(gte(incomeItems.date, `${start}-01`), lt(incomeItems.date, addMonths(`${start}-01`, 1)))),
     db.select({
-      creditCard: creditCards.name, dueDate: uploadedStatements.dueDate, amount: uploadedStatements.paymentNoInterest,
+      creditCardId: uploadedStatements.creditCardId, creditCard: creditCards.name, dueDate: uploadedStatements.dueDate,
+      closingDate: uploadedStatements.closingDate,
+      amount: uploadedStatements.paymentNoInterest,
     }).from(uploadedStatements).innerJoin(creditCards, eq(uploadedStatements.creditCardId, creditCards.id)),
     listUpcoming(db),
+    cardPaymentStatus(db),
   ]);
   const sumOf = (xs: { amount: string | null }[]) => xs.reduce((s, x) => s + Number(x.amount ?? 0), 0);
+  // A card payment is still to pay when it is not past due and no later próximo pago was set for the card (setting the
+  // next one means the previous cycle is settled).
+  const pendingCard = (cardId: number, due: string) =>
+    due >= ref && !manual.some((c) => c.creditCardId === cardId && c.dueDate > due);
+  // Card payments go in the month of their corte (when the spending happened, like installments), not of their due
+  // date; one whose corte is before the first month but still unpaid goes in the first month.
+  const cycleMonth = (closing: string) => (closing.slice(0, 7) < start ? start : closing.slice(0, 7));
   const budgetTotal = sumOf(budget);
   const expected = sumOf(incomeRows);
   let cumulative = 0;
@@ -147,9 +210,14 @@ export async function forecast(db: Db, f: { months?: number; from?: string } = {
     const loanPayments = loanRows.flatMap((l) => l.dates
       .map((date, i) => ({ name: l.name, amount: l.payment, date, number: i + 1, of: l.termPayments }))
       .filter((p) => p.date.startsWith(month)));
-    const cards = statements
-      .filter((s) => s.dueDate.startsWith(month) && Number(s.amount ?? 0) > 0)
-      .map((s) => ({ creditCard: s.creditCard, amount: s.amount!, date: s.dueDate }));
+    const cards = [
+      ...statements
+        .filter((s) => cycleMonth(s.closingDate) === month && Number(s.amount ?? 0) > 0 && pendingCard(s.creditCardId, s.dueDate))
+        .map((s) => ({ creditCard: s.creditCard, amount: s.amount!, date: s.dueDate, source: "statement" as const, declared: s.amount!, installmentsTotal: "0.00" })),
+      ...manual
+        .filter((c) => !c.statement && cycleMonth(c.closingDate) === month && Number(c.rest) > 0 && c.dueDate >= ref)
+        .map((c) => ({ creditCard: c.creditCard, amount: c.rest, date: c.dueDate, source: "manual" as const, declared: c.amount, installmentsTotal: c.installmentsTotal })),
+    ];
     const upcomingHere = upcoming
       .filter((u) => Number(u.pending) > 0 && (u.dueDate.startsWith(month) || (idx === 0 && u.dueDate.slice(0, 7) < month)))
       .map((u) => ({ id: u.id, name: u.name, amount: u.pending, date: u.dueDate }));

@@ -1,14 +1,14 @@
 /** JSON API for the dashboard (web/). Same services as the MCP tools. Reads are GET /api/<route>; writes are listed in `writes`. */
 import { z } from "zod";
 import type { Db } from "./db/connection";
-import { IncomeIn, IncomeItemIn, IncomeItemPatch, IncomePatch, InstallmentPlanPatch, UpcomingExpenseIn, UpcomingExpensePatch, UpcomingItemIn, UpcomingItemPatch } from "./schemas";
-import { listAccounts, listStatements } from "./services/accounts";
+import { CardPaymentIn, IncomeIn, IncomeItemIn, IncomeItemPatch, IncomePatch, InstallmentPlanPatch, UpcomingExpenseIn, UpcomingExpensePatch, UpcomingItemIn, UpcomingItemPatch } from "./schemas";
+import { deleteCardPayment, listAccounts, listStatements, setCardPayment } from "./services/accounts";
 import { listBudget } from "./services/budget";
 import { listCategories, today } from "./services/common";
 import {
   addIncome, addIncomeItem, deleteIncome, deleteIncomeItem, listIncomeItems, listIncomes, updateIncome, updateIncomeItem,
 } from "./services/incomes";
-import { budgetVsActual, forecast, installmentStatus, loanStatus, productSpending, spendingSummary } from "./services/reports";
+import { budgetVsActual, cardPaymentStatus, forecast, installmentStatus, loanStatus, productSpending, spendingSummary } from "./services/reports";
 import {
   addUpcoming, addUpcomingItem, deleteUpcoming, deleteUpcomingItem, listUpcoming, updateUpcoming, updateUpcomingItem,
 } from "./services/upcoming";
@@ -21,6 +21,7 @@ const opt = (q: Query, k: string) => q.get(k) || undefined;
 const routes: Record<string, (db: Db, q: Query) => Promise<unknown>> = {
   accounts: (db) => listAccounts(db),
   statements: (db) => listStatements(db),
+  "card-payments": (db) => cardPaymentStatus(db),
   categories: (db) => listCategories(db),
   transactions: (db, q) => listTransactions(db, {
     start: opt(q, "start"), end: opt(q, "end"), category: opt(q, "category"), kind: opt(q, "kind"),
@@ -43,6 +44,8 @@ const routes: Record<string, (db: Db, q: Query) => Promise<unknown>> = {
 
 /** Write routes: "<METHOD> <route>", with an optional numeric id as the last path segment. */
 const writes: Record<string, (db: Db, body: unknown, id: number) => Promise<unknown>> = {
+  "POST card-payments": (db, body) => setCardPayment(db, CardPaymentIn.parse(body)),
+  "DELETE card-payments": (db, _body, id) => deleteCardPayment(db, id),
   "POST incomes": (db, body) => addIncome(db, IncomeIn.parse(body)),
   "PATCH incomes": (db, body, id) => updateIncome(db, id, IncomePatch.parse(body)),
   "DELETE incomes": (db, _body, id) => deleteIncome(db, id),

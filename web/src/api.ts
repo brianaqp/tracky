@@ -22,7 +22,8 @@ export type ForecastMonth = {
   upcomingTotal: string; total: string; net: string; cumulative: string;
   installments: { description: string; creditCard: string; category: string | null; number: number; of: number; amount: string; date: string }[];
   loans: { name: string; amount: string; date: string; number: number; of: number }[];
-  cards: { creditCard: string; amount: string; date: string }[];
+  /** amount = what the cash flow counts; for a manual próximo pago it is `declared` minus the installments inside it. */
+  cards: { creditCard: string; amount: string; date: string; source: "statement" | "manual"; declared: string; installmentsTotal: string }[];
   upcoming: { id: number; name: string; amount: string; date: string }[];
 };
 export type Loan = {
@@ -38,6 +39,12 @@ export type Upcoming = {
 export type Statement = {
   id: number; periodStart: string; periodEnd: string; closingDate: string; dueDate: string;
   previousBalance: string | null; paymentNoInterest: string | null; minimumPayment: string | null; creditCard?: string;
+};
+/** Próximo pago of a card set by hand (one per card). */
+export type CardPayment = {
+  id: number; creditCardId: number; creditCard: string; bank: string; dueDate: string; amount: string; notes: string | null;
+  installments: { planId: number; description: string; number: number; of: number; amount: string; date: string }[];
+  installmentsTotal: string; rest: string; short: boolean; statement: { dueDate: string; amount: string | null } | null;
 };
 export type Bank = {
   id: number; name: string;

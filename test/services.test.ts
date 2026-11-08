@@ -2,11 +2,11 @@ import { beforeAll, describe, expect, test } from "bun:test";
 import { type Db, makeDb } from "../src/db/connection";
 import { eq } from "drizzle-orm";
 import { transactions } from "../src/db/schema";
-import { IncomeIn, IncomeItemIn, LoanIn, ManualInstallmentPlanIn, StatementIn, TicketIn, TransactionIn, UpcomingExpenseIn } from "../src/schemas";
-import { addCreditCard, addLoan } from "../src/services/accounts";
+import { CardPaymentIn, IncomeIn, IncomeItemIn, LoanIn, ManualInstallmentPlanIn, StatementIn, TicketIn, TransactionIn, UpcomingExpenseIn } from "../src/schemas";
+import { addCreditCard, addLoan, setCardPayment } from "../src/services/accounts";
 import { upsertBudgetItem } from "../src/services/budget";
 import { addMonths, paymentDates } from "../src/services/common";
-import { forecast, installmentStatus, loanStatus, productSpending, spendingSummary } from "../src/services/reports";
+import { cardPaymentStatus, closingBefore, forecast, installmentStatus, loanStatus, productSpending, spendingSummary } from "../src/services/reports";
 import { addUpcoming, listUpcoming, updateUpcomingItem } from "../src/services/upcoming";
 import {
   addIncome, addIncomeItem, deleteIncome, deleteIncomeItem, listIncomeItems, listIncomes, updateIncome, updateIncomeItem,
@@ -213,4 +213,54 @@ test("addInstallmentPlan records the purchase once and schedules its payments", 
     credit_card: "Platinum", description: "Telefono", total_amount: 1000, months: 3,
     purchase_date: "2027-03-05", first_payment_date: "2027-04-05",
   }))).id).toBe(plan.id);
+});
+
+test("a próximo pago set by hand enters the forecast minus the installments inside it", async () => {
+  await addCreditCard(db, { bank: "Banco Uno", name: "Oro", due_day: 10 });
+  await addInstallmentPlan(db, ManualInstallmentPlanIn.parse({
+    credit_card: "Oro", description: "Pantalla", total_amount: 3000, months: 3,
+    purchase_date: "2027-07-01", first_payment_date: "2027-07-20",
+  }));
+  await setCardPayment(db, CardPaymentIn.parse({ credit_card: "Oro", amount: 5000, due_date: "2027-07-10" }));
+  // one row per card: setting it again replaces it
+  const row = await setCardPayment(db, CardPaymentIn.parse({ credit_card: "Oro", amount: 26000, due_date: "2027-08-10" }));
+  const [status] = (await cardPaymentStatus(db)).filter((c) => c.creditCard === "Oro");
+  expect(status).toMatchObject({ id: row.id, dueDate: "2027-08-10", installmentsTotal: "1000.00", rest: "25000.00", short: false, statement: null });
+  expect(status!.installments.map((i) => i.date)).toEqual(["2027-07-20"]);
+
+  // no closing day: the cycle closes a month before the due date, so it goes in July, with its installment
+  const [jul, aug] = await forecast(db, { from: "2027-07-01", months: 2 });
+  expect(aug!.cards.filter((c) => c.creditCard === "Oro")).toEqual([]);
+  expect(jul!.installments.find((i) => i.description === "Pantalla")).toMatchObject({ amount: "1000.00" });
+  expect(jul!.cards.find((c) => c.creditCard === "Oro")).toMatchObject({ amount: "25000.00", declared: "26000.00", source: "manual", date: "2027-08-10" });
+  // past due: already paid
+  expect((await forecast(db, { from: "2027-08-11", months: 1 }))[0]!.cards.filter((c) => c.creditCard === "Oro")).toEqual([]);
+});
+
+test("a statement older than the card's próximo pago counts as paid", async () => {
+  await addCreditCard(db, { bank: "Banco Uno", name: "Azul", due_day: 5 });
+  await importStatement(db, StatementIn.parse({
+    credit_card: "Azul", period_start: "2027-09-01", period_end: "2027-09-20", closing_date: "2027-09-20",
+    due_date: "2027-10-05", payment_no_interest: 900,
+    transactions: [{ operation_date: "2027-09-02", description: "TIENDA AZUL", amount: 900 }],
+  }));
+  const azul = async (from: string) => (await forecast(db, { from, months: 2 })).map((m) => m.cards.find((c) => c.creditCard === "Azul"));
+  expect((await azul("2027-10-01"))[0]).toMatchObject({ source: "statement", amount: "900.00" });
+  await setCardPayment(db, CardPaymentIn.parse({ credit_card: "Azul", amount: 8000, due_date: "2027-11-05" }));
+  const [oct, nov] = await azul("2027-10-01");
+  expect(oct).toMatchObject({ source: "manual", declared: "8000.00", date: "2027-11-05" });
+  expect(nov).toBeUndefined();
+});
+
+test("closingBefore: the corte of the cycle paid on a due date", () => {
+  expect(closingBefore("2026-12-03", 12)).toBe("2026-11-12");
+  expect(closingBefore("2026-12-06", 26)).toBe("2026-11-26");
+  expect(closingBefore("2026-12-20", 14)).toBe("2026-12-14");
+  expect(closingBefore("2026-12-06", null)).toBe("2026-11-06");
+});
+
+test("a card payment defaults to the card's next due day", async () => {
+  const row = await setCardPayment(db, CardPaymentIn.parse({ credit_card: "Oro", amount: 100 }));
+  expect(Number(row.dueDate.slice(8))).toBeLessThanOrEqual(10);
+  expect(row.dueDate >= new Date().toLocaleDateString("en-CA")).toBe(true);
 });

@@ -81,6 +81,15 @@ export const StatementIn = z.object({
 });
 export type StatementIn = z.infer<typeof StatementIn>;
 
+/** Próximo pago of a card, set by hand: one per card, replacing the previous one. */
+export const CardPaymentIn = z.object({
+  credit_card: Ref,
+  amount: Money.describe("What you will pay (pago para no generar intereses), including this cycle's installments 'a meses'"),
+  due_date: IsoDate.optional().describe("Defaults to the next occurrence of the card's due_day"),
+  notes: z.string().nullable().optional(),
+});
+export type CardPaymentIn = z.infer<typeof CardPaymentIn>;
+
 export const BudgetItemIn = z.object({
   name: Name,
   amount: Money,

@@ -100,6 +100,20 @@ export const uploadedStatements = snakeCase.table("uploaded_statements", {
     uploadedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
 }, (t) => [unique("uploaded_statements_card_closing").on(t.creditCardId, t.closingDate)]);
 
+/**
+ * Próximo pago: what the user says the next payment of a card will be, without a statement. One row per card,
+ * overwritten every cycle. It includes that cycle's installments "a meses"; a statement with a due date in the same
+ * month replaces it in the forecast.
+ */
+export const cardPayments = snakeCase.table("card_payments", {
+    id: integer().primaryKey().generatedAlwaysAsIdentity(),
+    creditCardId: integer().notNull().unique().references(() => creditCards.id, { onDelete: "cascade" }),
+    dueDate: date().notNull(),
+    amount: money().notNull(),
+    notes: text(),
+    updatedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+}, (t) => [check("card_payments_amount_positive", sql`${t.amount} > 0`)]);
+
 /** Purchases "a meses": one plan, paid in `months` installments starting at `firstPaymentDate`. */
 export const installmentPlans = snakeCase.table("installment_plans", {
     id: integer().primaryKey().generatedAlwaysAsIdentity(),

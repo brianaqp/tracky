@@ -2,14 +2,14 @@ import { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import type { Db } from "../db/connection";
 import {
-  BudgetItemIn, IncomeIn, IncomeItemIn, InstallmentPlanPatch, ManualInstallmentPlanIn, Currency, Day, IsoDate, LoanIn, Money, Name, Ref, StatementIn, TicketIn, TransactionIn, TransactionKind,
+  BudgetItemIn, CardPaymentIn, IncomeIn, IncomeItemIn, InstallmentPlanPatch, ManualInstallmentPlanIn, Currency, Day, IsoDate, LoanIn, Money, Name, Ref, StatementIn, TicketIn, TransactionIn, TransactionKind,
   UpcomingExpenseIn, UpcomingItemIn,
 } from "../schemas";
-import { addCreditCard, addDebitAccount, addLoan, listAccounts } from "../services/accounts";
+import { addCreditCard, addDebitAccount, addLoan, deleteCardPayment, listAccounts, setCardPayment } from "../services/accounts";
 import { listBudget, upsertBudgetItem } from "../services/budget";
 import { listCategories } from "../services/common";
 import { addIncome, addIncomeItem, listIncomeItems, listIncomes } from "../services/incomes";
-import { budgetVsActual, forecast, installmentStatus, loanStatus, productSpending, spendingSummary } from "../services/reports";
+import { budgetVsActual, cardPaymentStatus, forecast, installmentStatus, loanStatus, productSpending, spendingSummary } from "../services/reports";
 import { addUpcoming, addUpcomingItem, deleteUpcoming, listUpcoming, updateUpcomingItem } from "../services/upcoming";
 import { addTicket } from "../services/tickets";
 import {
@@ -80,6 +80,31 @@ export function buildServer(db: Db): McpServer {
       inputSchema: StatementIn.shape,
     },
     async (args) => out(await importStatement(db, args)),
+  );
+
+  mcp.registerTool(
+    "set_card_payment",
+    {
+      description:
+        "Set the próximo pago of a credit card by hand, without a statement: what will be paid on its next due date " +
+        "(e.g. 'en Nu debo 40,000'). One per card: replaces the previous one. The amount includes that cycle's " +
+        "installments 'a meses'; the forecast subtracts them so they are not counted twice. A statement due the same " +
+        "month replaces it.",
+      inputSchema: CardPaymentIn.shape,
+    },
+    async (args) => out(await setCardPayment(db, args)),
+  );
+
+  mcp.registerTool(
+    "list_card_payments",
+    { description: "Próximos pagos set by hand per card, with the installments inside each one and the statement that replaced it, if any." },
+    async () => out(await cardPaymentStatus(db)),
+  );
+
+  mcp.registerTool(
+    "delete_card_payment",
+    { description: "Delete a card's próximo pago (id from list_card_payments).", inputSchema: { id: z.number().int() } },
+    async ({ id }) => out(await deleteCardPayment(db, id)),
   );
 
   mcp.registerTool(
@@ -262,7 +287,8 @@ export function buildServer(db: Db): McpServer {
     "forecast",
     {
       description:
-        "Cash flow per month: income minus budget, pending installments, loan payments, card statements due and " +
+        "Cash flow per month: income minus budget, pending installments, loan payments, card payments due (statement or " +
+        "próximo pago set by hand, minus its installments) and " +
         "próximos gastos; net and cumulative. Starts this month unless `from` is given.",
       inputSchema: { months: z.number().int().min(1).max(24).default(3), from: IsoDate.optional() },
     },

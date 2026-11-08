@@ -1,9 +1,9 @@
 /** Banks and their credit cards, debit accounts and loans. */
 import { eq, sql } from "drizzle-orm";
 import type { Db } from "../db/connection";
-import { banks, creditCards, debitAccounts, loans, uploadedStatements } from "../db/schema";
-import type { LoanIn } from "../schemas";
-import { lower, money } from "./common";
+import { banks, cardPayments, creditCards, debitAccounts, loans, uploadedStatements } from "../db/schema";
+import type { CardPaymentIn, LoanIn } from "../schemas";
+import { addMonths, creditCardId, lower, money, today } from "./common";
 
 type Currency = "MXN" | "USD";
 
@@ -79,4 +79,37 @@ export function listStatements(db: Db) {
     .from(uploadedStatements)
     .innerJoin(creditCards, eq(uploadedStatements.creditCardId, creditCards.id))
     .orderBy(sql`${uploadedStatements.closingDate} desc`);
+}
+
+/** The next date with `day` (clamped to the month's length) on or after `from`. */
+function nextDay(from: string, day: number): string {
+  const onMonth = (iso: string) => {
+    const [y, m] = iso.split("-").map(Number) as [number, number];
+    const last = new Date(Date.UTC(y, m, 0)).getUTCDate();
+    return `${iso.slice(0, 8)}${String(Math.min(day, last)).padStart(2, "0")}`;
+  };
+  const here = onMonth(from);
+  return here >= from ? here : onMonth(addMonths(`${from.slice(0, 8)}01`, 1));
+}
+
+/** Sets the próximo pago of a card (one per card: replaces the previous one). Without due_date, uses the card's due_day. */
+export async function setCardPayment(db: Db, d: CardPaymentIn) {
+  const cardId = await creditCardId(db, d.credit_card);
+  let dueDate = d.due_date;
+  if (!dueDate) {
+    const [card] = await db.select({ dueDay: creditCards.dueDay, name: creditCards.name }).from(creditCards).where(eq(creditCards.id, cardId));
+    if (!card?.dueDay) throw new Error(`La tarjeta '${card?.name}' no tiene día de pago: indica due_date.`);
+    dueDate = nextDay(today(), card.dueDay);
+  }
+  const values = { creditCardId: cardId, dueDate, amount: money(d.amount), notes: d.notes ?? null, updatedAt: new Date() };
+  const [row] = await db.insert(cardPayments).values(values)
+    .onConflictDoUpdate({ target: cardPayments.creditCardId, set: values })
+    .returning();
+  return row!;
+}
+
+export async function deleteCardPayment(db: Db, id: number) {
+  const [row] = await db.delete(cardPayments).where(eq(cardPayments.id, id)).returning({ id: cardPayments.id });
+  if (!row) throw new Error(`Próximo pago ${id} no encontrado.`);
+  return row;
 }
