@@ -1,7 +1,7 @@
 /** JSON API for the dashboard (web/). Same services as the MCP tools. Reads are GET /api/<route>; writes are listed in `writes`. */
 import { z } from "zod";
 import type { Db } from "./db/connection";
-import { CardPaymentIn, IncomeIn, IncomeItemIn, IncomeItemPatch, IncomePatch, InstallmentPlanPatch, UpcomingExpenseIn, UpcomingExpensePatch, UpcomingItemIn, UpcomingItemPatch } from "./schemas";
+import { CardPaymentIn, IncomeIn, IncomeItemIn, IncomeItemPatch, IncomePatch, InstallmentPlanPatch, ProductCategoryPatch, UpcomingExpenseIn, UpcomingExpensePatch, UpcomingItemIn, UpcomingItemPatch } from "./schemas";
 import { deleteCardPayment, listAccounts, listStatements, setCardPayment } from "./services/accounts";
 import { listBudget } from "./services/budget";
 import { listCategories, today } from "./services/common";
@@ -12,7 +12,7 @@ import { budgetVsActual, cardPaymentStatus, forecast, installmentStatus, loanSta
 import {
   addUpcoming, addUpcomingItem, deleteUpcoming, deleteUpcomingItem, listUpcoming, updateUpcoming, updateUpcomingItem,
 } from "./services/upcoming";
-import { listTickets } from "./services/tickets";
+import { listProductCategories, listTickets, updateProductCategory } from "./services/tickets";
 import { listTransactions, updateInstallmentPlan } from "./services/transactions";
 
 type Query = URLSearchParams;
@@ -38,13 +38,18 @@ const routes: Record<string, (db: Db, q: Query) => Promise<unknown>> = {
   "spending-summary": (db, q) => spendingSummary(db, {
     start: opt(q, "start"), end: opt(q, "end"), group_by: q.get("group_by") === "month" ? "month" : "category",
   }),
-  "product-spending": (db, q) => productSpending(db, { start: opt(q, "start"), end: opt(q, "end") }),
+  "product-spending": (db, q) => productSpending(db, {
+    start: opt(q, "start"), end: opt(q, "end"),
+    group_by: q.get("group_by") === "payment" ? "payment" : q.get("group_by") === "store" ? "store" : "category",
+  }),
+  "product-categories": (db) => listProductCategories(db),
   "budget-vs-actual": (db, q) => budgetVsActual(db, q.get("month") ?? today().slice(0, 7)),
 };
 
 /** Write routes: "<METHOD> <route>", with an optional numeric id as the last path segment. */
 const writes: Record<string, (db: Db, body: unknown, id: number) => Promise<unknown>> = {
   "POST card-payments": (db, body) => setCardPayment(db, CardPaymentIn.parse(body)),
+  "POST product-categories": (db, body) => updateProductCategory(db, ProductCategoryPatch.parse(body)),
   "DELETE card-payments": (db, _body, id) => deleteCardPayment(db, id),
   "POST incomes": (db, body) => addIncome(db, IncomeIn.parse(body)),
   "PATCH incomes": (db, body, id) => updateIncome(db, id, IncomePatch.parse(body)),

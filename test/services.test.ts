@@ -11,7 +11,7 @@ import { addUpcoming, listUpcoming, updateUpcomingItem } from "../src/services/u
 import {
   addIncome, addIncomeItem, deleteIncome, deleteIncomeItem, listIncomeItems, listIncomes, updateIncome, updateIncomeItem,
 } from "../src/services/incomes";
-import { addTicket } from "../src/services/tickets";
+import { addTicket, listProductCategories, updateProductCategory } from "../src/services/tickets";
 import {
   addInstallmentPlan, addTransaction, categorizeTransactions, importStatement, listTransactions, updateInstallmentPlan,
 } from "../src/services/transactions";
@@ -100,11 +100,64 @@ test("addTicket links products to the card movement", async () => {
       { product: "Manzana 2 kg", product_category: "Fruta", total: 85.5 },
     ],
   }));
-  expect(ticket).toMatchObject({ total: "663.50", items: 2 });
+  expect(ticket).toMatchObject({ total: "663.50", paymentMethod: null });
+  expect(ticket.items).toHaveLength(2);
   expect(await productSpending(db, {})).toEqual([
-    { group: "Lácteos", total: "578.00", items: 1 },
-    { group: "Fruta", total: "85.50", items: 1 },
+    { group: "Lácteos", tentative: true, total: "578.00", items: 1 },
+    { group: "Fruta", tentative: true, total: "85.50", items: 1 },
   ]);
+});
+
+describe("tickets", () => {
+  test("payment method, existing vs tentative categories and per-ticket breakdown", async () => {
+    await updateProductCategory(db, { name: "Lácteos" });
+    await updateProductCategory(db, { name: "fruta", rename_to: "Frutas" });
+
+    const ticket = await addTicket(db, TicketIn.parse({
+      store: "Super Norte", purchase_date: "2026-11-01", payment_method: "credit_card", account: "Platinum",
+      items: [
+        { product: "Queso panela", product_category: "lácteos", total: 90 },
+        { product: "Plátano", product_category: "Frutas", total: 30 },
+        { product: "Pera", product_category: "Frutas", total: 25 },
+        { product: "Detergente", product_category: "Limpieza", total: 120 },
+        { product: "Leche Lala 12 pz", total: 289 },
+        { product: "Chicle", total: 15 },
+      ],
+    }));
+    expect(ticket).toMatchObject({ total: "569.00", paymentMethod: "credit_card", account: "Platinum", uncategorized: ["Chicle"] });
+    expect(ticket.byCategory).toEqual([
+      { category: "Lácteos", tentative: false, total: "379.00", items: 2 },
+      { category: "Limpieza", tentative: true, total: "120.00", items: 1 },
+      { category: "Frutas", tentative: false, total: "55.00", items: 2 },
+      { category: null, tentative: false, total: "15.00", items: 1 },
+    ]);
+
+    await addTicket(db, TicketIn.parse({
+      store: "Tianguis", purchase_date: "2026-11-02", payment_method: "cash", items: [{ product: "Pera", total: 40 }],
+    }));
+    expect(await productSpending(db, { start: "2026-11-01", group_by: "payment" })).toEqual([
+      { group: "Platinum", tentative: false, total: "569.00", items: 6 },
+      { group: "Efectivo", tentative: false, total: "40.00", items: 1 },
+    ]);
+    expect((await listProductCategories(db)).map((c) => [c.name, c.tentative])).toEqual([
+      ["Limpieza", true], ["Frutas", false], ["Lácteos", false],
+    ]);
+  });
+
+  test("card payments need an account", async () => {
+    expect(TicketIn.safeParse({ store: "X", purchase_date: "2026-11-01", payment_method: "credit_card", items: [{ product: "A", total: 1 }] }).success).toBe(false);
+    await expect(addTicket(db, { ...TicketIn.parse({ store: "X", purchase_date: "2026-11-01", items: [{ product: "A", total: 1 }] }), payment_method: "debit_account" }))
+      .rejects.toThrow("account is required");
+  });
+
+  test("merging a tentative category moves its products", async () => {
+    await addTicket(db, TicketIn.parse({ store: "Y", purchase_date: "2026-11-03", items: [{ product: "Cloro", product_category: "Aseo", total: 20 }] }));
+    await expect(updateProductCategory(db, { name: "Aseo", rename_to: "limpieza" })).rejects.toThrow("merge_into");
+    expect(await updateProductCategory(db, { name: "Aseo", merge_into: "Limpieza" })).toEqual({ merged: "Aseo", into: "Limpieza", products: 1 });
+    const cats = await listProductCategories(db);
+    expect(cats.find((c) => c.name === "Limpieza")).toMatchObject({ products: 2 });
+    expect(cats.some((c) => c.name === "Aseo")).toBe(false);
+  });
 });
 
 test("addMonths clamps to the end of the month", () => {

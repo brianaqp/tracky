@@ -2,7 +2,7 @@ import { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import type { Db } from "../db/connection";
 import {
-  BudgetItemIn, CardPaymentIn, IncomeIn, IncomeItemIn, InstallmentPlanPatch, ManualInstallmentPlanIn, Currency, Day, IsoDate, LoanIn, Money, Name, Ref, StatementIn, TicketIn, TransactionIn, TransactionKind,
+  BudgetItemIn, CardPaymentIn, IncomeIn, IncomeItemIn, InstallmentPlanPatch, ManualInstallmentPlanIn, ProductCategoryPatch, TicketPaymentIn, Currency, Day, IsoDate, LoanIn, Money, Name, Ref, StatementIn, TicketIn, TransactionIn, TransactionKind,
   UpcomingExpenseIn, UpcomingItemIn,
 } from "../schemas";
 import { addCreditCard, addDebitAccount, addLoan, deleteCardPayment, listAccounts, setCardPayment } from "../services/accounts";
@@ -11,7 +11,7 @@ import { listCategories } from "../services/common";
 import { addIncome, addIncomeItem, listIncomeItems, listIncomes } from "../services/incomes";
 import { budgetVsActual, cardPaymentStatus, forecast, installmentStatus, loanStatus, productSpending, spendingSummary } from "../services/reports";
 import { addUpcoming, addUpcomingItem, deleteUpcoming, listUpcoming, updateUpcomingItem } from "../services/upcoming";
-import { addTicket } from "../services/tickets";
+import { addTicket, listProductCategories, listTickets, setTicketPayment, updateProductCategory } from "../services/tickets";
 import {
   addInstallmentPlan, addTransaction, categorizeTransactions, importStatement, listTransactions, updateInstallmentPlan,
 } from "../services/transactions";
@@ -27,8 +27,11 @@ const INSTRUCTIONS =
   "then call import_statement with every movement. amount is always positive; set kind: card payments are 'payment', " +
   "'01 DE 03 ...' rows are installments of a purchase 'a meses' (declare them in installment_plans), cash withdrawals " +
   "'cash_withdrawal', commissions 'fee'. Re-importing is safe. Then categorize with high-level categories " +
-  "(list_categories first to reuse names). Supermarket tickets go to add_ticket with product categories, linked to " +
-  "the card movement via transaction_id. This server may be serverless: if a call fails, wait a minute and retry.";
+  "(list_categories first to reuse names). Supermarket tickets go to add_ticket: call list_product_categories first and " +
+  "put each item in an existing product category; only when none fits, propose a new one (it is stored as tentative " +
+  "for review with update_product_category). Set payment_method (cash, or the credit card / debit account from " +
+  "list_accounts). Tickets are standalone: they do not change spending or the forecast. " +
+  "This server may be serverless: if a call fails, wait a minute and retry.";
 
 export function buildServer(db: Db): McpServer {
   const mcp = new McpServer({ name: "tracky", version: "0.2.0" }, { instructions: INSTRUCTIONS });
@@ -156,11 +159,50 @@ export function buildServer(db: Db): McpServer {
     "add_ticket",
     {
       description:
-        "Record a purchase ticket (supermarket, despensa) with its products. Products and product categories are created " +
-        "if missing. Link it to the card movement with transaction_id.",
+        "Record a purchase ticket (supermarket, despensa) with its products and how it was paid (cash, credit card or " +
+        "debit account). Reuse existing product categories (list_product_categories); a new category name is created " +
+        "as tentative. Returns the ticket's spending by product category. Standalone: it does not touch transactions; " +
+        "transaction_id is optional.",
       inputSchema: TicketIn.shape,
     },
     async (args) => out(await addTicket(db, args)),
+  );
+
+  mcp.registerTool(
+    "set_ticket_payment",
+    {
+      description:
+        "Set how a ticket was paid once it is known (cash, or a credit card / debit account from list_accounts); " +
+        "payment_method null leaves it to be defined.",
+      inputSchema: TicketPaymentIn.shape,
+    },
+    async (args) => out(await setTicketPayment(db, args)),
+  );
+
+  mcp.registerTool(
+    "list_tickets",
+    {
+      description: "Recorded tickets, newest first, with payment method, items and spending by product category.",
+      inputSchema: { limit: z.number().int().positive().max(200).default(20) },
+    },
+    async ({ limit }) => out(await listTickets(db, limit)),
+  );
+
+  mcp.registerTool(
+    "list_product_categories",
+    { description: "Product categories (Lácteos, Fruta...) with product counts; tentative ones (pending review) first." },
+    async () => out(await listProductCategories(db)),
+  );
+
+  mcp.registerTool(
+    "update_product_category",
+    {
+      description:
+        "Review a product category: with only name it is confirmed (no longer tentative); rename_to renames and " +
+        "confirms it; merge_into moves its products to another category and deletes it.",
+      inputSchema: ProductCategoryPatch.shape,
+    },
+    async (args) => out(await updateProductCategory(db, args)),
   );
 
   mcp.registerTool(
@@ -175,8 +217,11 @@ export function buildServer(db: Db): McpServer {
   mcp.registerTool(
     "product_spending",
     {
-      description: "Ticket spending by product category (what the despensa is made of).",
-      inputSchema: { start: IsoDate.optional(), end: IsoDate.optional() },
+      description: "Ticket spending grouped by product category (where the despensa money goes), payment method or store.",
+      inputSchema: {
+        start: IsoDate.optional(), end: IsoDate.optional(),
+        group_by: z.enum(["category", "payment", "store"]).default("category"),
+      },
     },
     async (args) => out(await productSpending(db, args)),
   );

@@ -58,11 +58,17 @@ export type Bank = {
     startDate: string;
   }[];
 };
+export type TicketPayment = "cash" | "credit_card" | "debit_account";
 export type Ticket = {
   id: number; store: string; purchaseDate: string; total: string; transactionId: number | null; notes: string | null;
-  items: { product: string; productCategory: string | null; quantity: number; total: string }[];
+  /** null: not recorded. `account` is the card's name for card payments. */
+  paymentMethod: TicketPayment | null; account: string | null;
+  items: { product: string; productCategory: string | null; tentative: boolean; quantity: number; total: string }[];
+  /** Where this ticket's money went, largest first; `category` null = uncategorized. */
+  byCategory: { category: string | null; tentative: boolean; total: string; items: number }[];
 };
-export type ProductGroup = { group: string; total: string; items: number };
+export type ProductGroup = { group: string; tentative: boolean; total: string; items: number };
+export type ProductCategory = { id: number; name: string; tentative: boolean; products: number };
 /** Income approximation; `received` is what its deposits add up to in the requested month. */
 export type Income = { id: number; name: string; amount: string; currency: string; payday: number | null; received: string };
 /** A real deposit (abono). */

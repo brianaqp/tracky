@@ -135,18 +135,42 @@ export const TicketIn = z.object({
   store: Name,
   purchase_date: IsoDate,
   total: Money.optional().describe("Defaults to the sum of the items"),
-  transaction_id: z.number().int().optional().describe("The card movement this ticket explains"),
+  payment_method: z.enum(["cash", "credit_card", "debit_account"]).optional().describe("How the ticket was paid"),
+  account: Ref.optional().describe("The credit card or debit account (id or name) when payment_method is a card"),
+  transaction_id: z.number().int().optional().describe("The card movement this ticket explains, if any"),
   notes: z.string().optional(),
   items: z
     .array(z.object({
       product: Name,
-      product_category: Name.optional().describe("e.g. Lácteos, Fruta. Created if missing"),
+      product_category: Name.optional().describe(
+        "Reuse an existing product category (list_product_categories). A new name is created as tentative, pending review. " +
+        "Omit it to keep the product's current category",
+      ),
       quantity: z.number().positive().default(1),
       total: Money.describe("Total paid for this line"),
     }))
     .min(1),
+}).refine((d) => (d.payment_method === "credit_card" || d.payment_method === "debit_account") === (d.account !== undefined), {
+  message: "account is required for card payments and not allowed otherwise",
+  path: ["account"],
 });
 export type TicketIn = z.infer<typeof TicketIn>;
+
+/** Set (or clear, with payment_method null) how a ticket was paid once it is known. */
+export const TicketPaymentIn = z.object({
+  ticket_id: z.number().int(),
+  payment_method: z.enum(["cash", "credit_card", "debit_account"]).nullable().describe("null: still to be defined"),
+  account: Ref.optional().describe("The credit card or debit account (id or name) when payment_method is a card"),
+});
+export type TicketPaymentIn = z.infer<typeof TicketPaymentIn>;
+
+/** Review a product category: confirm it, rename it, or merge it into another (its products move there). */
+export const ProductCategoryPatch = z.object({
+  name: Name,
+  rename_to: Name.optional(),
+  merge_into: Name.optional().describe("Existing category that absorbs this one's products; this one is deleted"),
+});
+export type ProductCategoryPatch = z.infer<typeof ProductCategoryPatch>;
 
 export const PaymentFrequency = z.enum(["monthly", "biweekly"]);
 

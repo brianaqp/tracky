@@ -224,6 +224,8 @@ export const upcomingExpenseItems = snakeCase.table("upcoming_expense_items", {
 export const productCategories = snakeCase.table("product_categories", {
     id: integer().primaryKey().generatedAlwaysAsIdentity(),
     name: text().notNull().unique(),
+    /** Created while recording a ticket because no existing category fit; pending review. */
+    tentative: boolean().notNull().default(false),
 });
 
 export const products = snakeCase.table("products", {
@@ -233,14 +235,24 @@ export const products = snakeCase.table("products", {
     productCategoryId: integer().references(() => productCategories.id, { onDelete: "set null" }),
 });
 
+/** How a ticket was paid: cash or one of the registered cards. */
+export const ticketPaymentEnum = pgEnum("ticket_payment", ["cash", "credit_card", "debit_account"]);
+
 export const tickets = snakeCase.table("tickets", {
     id: integer().primaryKey().generatedAlwaysAsIdentity(),
     store: text().notNull(),
     purchaseDate: date().notNull(),
     total: money().notNull(),
+    paymentMethod: ticketPaymentEnum(),
+    creditCardId: integer().references(() => creditCards.id, { onDelete: "set null" }),
+    debitAccountId: integer().references(() => debitAccounts.id, { onDelete: "set null" }),
     transactionId: integer().unique().references(() => transactions.id, { onDelete: "set null" }),
     notes: text(),
-});
+}, (t) => [
+    // A card id only goes with its method (the service requires it; a deleted card leaves the method).
+    check("tickets_payment_card", sql`${t.creditCardId} is null or ${t.paymentMethod} = 'credit_card'`),
+    check("tickets_payment_debit", sql`${t.debitAccountId} is null or ${t.paymentMethod} = 'debit_account'`),
+]);
 
 export const ticketItems = snakeCase.table("ticket_items", {
     id: integer().primaryKey().generatedAlwaysAsIdentity(),

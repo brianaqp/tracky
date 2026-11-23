@@ -38,6 +38,7 @@ ALLOW_TOKEN=<token> bun data/seed.ts       # load the mock data through the MCP 
 - Purchases "a meses": the full purchase is one `purchase` (counted once), the "01 DE 03 ..." rows are `installment` rows linked to an `installment_plans` row; the forecast uses the plan's pending payments.
 - Re-importing a statement is idempotent through `transactions.dedupe_key` (identical rows get an ordinal); rows already recorded by hand with the same key get attached to the statement.
 - Two separate taxonomies: `categories` (high level: Despensa, Servicio...) for transactions and budget; `product_categories` (Lácteos, Fruta...) for ticket items.
+- Tickets are standalone: they record where supermarket money goes (spending per product category) and how it was paid (`payment_method`: cash, credit card or debit account), but never enter spending, budget or the forecast; `transaction_id` is optional. Items reuse existing product categories; a new name is created `tentative` until reviewed (`update_product_category`: confirm, rename or merge).
 - Budget items mirror the user's Notion table; the per-quincena "half value" is intentionally not stored.
 - Loans are `monthly` or `biweekly` (quincenal: start day and +15 days). `payment`/`term_payments` count payments, not months; payments dated before today count as paid.
 - Próximos gastos (`upcoming_expenses` + items): one-off events; unpaid items enter the forecast in the event's month (overdue ones in the current month).

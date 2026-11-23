@@ -2,7 +2,7 @@
 import { and, count, desc, eq, gte, inArray, lt, sql, sum } from "drizzle-orm";
 import type { Db } from "../db/connection";
 import {
-  banks, budgetItems, cardPayments, categories, creditCards, incomeItems, incomes, installmentPlans, loans, productCategories, products, ticketItems,
+  banks, budgetItems, cardPayments, categories, creditCards, debitAccounts, incomeItems, incomes, installmentPlans, loans, productCategories, products, ticketItems,
   tickets, transactions, uploadedStatements,
 } from "../db/schema";
 import { addMonths, money, paymentDates, today, withDay } from "./common";
@@ -31,20 +31,30 @@ export async function spendingSummary(db: Db, f: { start?: string; end?: string;
 }
 
 /** Ticket spending per product category (what a "Despensa" is made of). */
-export async function productSpending(db: Db, f: { start?: string; end?: string }) {
+export async function productSpending(
+  db: Db, f: { start?: string; end?: string; group_by?: "category" | "payment" | "store" },
+) {
+  const key = f.group_by === "payment"
+    ? sql<string>`coalesce(${creditCards.name}, ${debitAccounts.name}, case when ${tickets.paymentMethod} = 'cash' then 'Efectivo' end, '(por definir)')`
+    : f.group_by === "store"
+      ? sql<string>`${tickets.store}`
+      : sql<string>`coalesce(${productCategories.name}, '(sin categoría)')`;
+  const tentative = f.group_by && f.group_by !== "category" ? sql<boolean>`false` : sql<boolean>`coalesce(bool_or(${productCategories.tentative}), false)`;
   const rows = await db
-    .select({ group: sql<string>`coalesce(${productCategories.name}, '(sin categoría)')`, total: sum(ticketItems.total), items: count() })
+    .select({ group: key, tentative, total: sum(ticketItems.total), items: count() })
     .from(ticketItems)
     .innerJoin(tickets, eq(ticketItems.ticketId, tickets.id))
     .innerJoin(products, eq(ticketItems.productId, products.id))
     .leftJoin(productCategories, eq(products.productCategoryId, productCategories.id))
+    .leftJoin(creditCards, eq(tickets.creditCardId, creditCards.id))
+    .leftJoin(debitAccounts, eq(tickets.debitAccountId, debitAccounts.id))
     .where(and(
       f.start ? gte(tickets.purchaseDate, f.start) : undefined,
       f.end ? lt(tickets.purchaseDate, f.end) : undefined,
     ))
     .groupBy(sql`1`)
     .orderBy(desc(sum(ticketItems.total)));
-  return rows.map((r) => ({ group: r.group, total: money(Number(r.total)), items: Number(r.items) }));
+  return rows.map((r) => ({ group: r.group, tentative: !!r.tentative, total: money(Number(r.total)), items: Number(r.items) }));
 }
 
 /** Each installment plan with what is paid, what remains and its payment schedule. */
